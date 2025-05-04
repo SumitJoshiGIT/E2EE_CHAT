@@ -1,31 +1,98 @@
-# E2EE_CHAT
+# E2EE Chat Application
 
-This is a java app we are building for Project Based Learning Evaluation in 4th Sem of our B Tech. CSE degree.
-The aim is to implement an app akin to whatsapp that implements E2EE, the difference we are using Java based Tech 
-Stack JAVA FX and Spring Boot.
+A secure, end-to-end encrypted chat application that allows users to communicate privately with one-on-one messaging.
 
-## ProjectSetup
+## Features
 
-# A note on Maven
-Choice of Dependancy mgmt. tool: Maven
+- 🔒 End-to-End Encryption using Signal Protocol
+- 👤 User Authentication
+- 👥 One-on-One Chat
+- 📝 Profile Management
+- 💬 Real-time Messaging
+- 🔐 Secure Key Exchange
+
+## Tech Stack
+
+### Frontend
+- JavaFX
+- FXML for UI
+- CSS for styling
+- Signal Protocol Library for Java
+
+### Backend
+- Spring Boot
+- Spring Security
+- Spring WebSocket
+- MongoDB
+- JWT Authentication
+
+## Prerequisites
+
+- Java 17 or higher
+- Maven
+- MongoDB
+- JavaFX SDK
+
+## Setup Instructions
+
+1. Clone the repository
+2. Install dependencies:
+   ```bash
+   # Install backend dependencies
+   cd backend
+   mvn install
+
+   # Install frontend dependencies
+   cd ../frontend
+   mvn install
+   ```
+
+3. Set up environment variables:
+   - Create `application.properties` in the backend directory
+   - Configure the necessary properties (see application.properties.example)
+
+4. Start the development servers:
+   ```bash
+   # Start backend server
+   cd backend
+   mvn spring-boot:run
+
+   # Start frontend application
+   cd ../frontend
+   mvn javafx:run
+   ```
+
+## Security Features
+
+- End-to-End Encryption using Signal Protocol
+- Secure key exchange
+- Message authentication
+- Perfect forward secrecy
+- Double ratchet algorithm
+
+## License
+
+MIT
+
+## Project Setup
+
+### A note on Maven
+Choice of Dependency management tool: Maven
 Why?
-- Doesnt require much setup convention over config. 
-- Easier to read 
-Thats it 
+- Doesn't require much setup
+- Convention over configuration
+- Easier to read
 
-# Choice of Database 
-
-For now lets stick to MongoDB.
+### Choice of Database
+For now, we're using MongoDB.
 Why?
-- Great for prototyping 
+- Great for prototyping
 
-Later we can just modify the code to accomdate Postgres
+Later we can modify the code to accommodate PostgreSQL
 Why?
-- Postgres is way more scalable
+- PostgreSQL is more scalable
 
-# Responsibilities 
+### Responsibilities
 
-## Sumit Joshi 
-I am building the backend api 
-
-##
+## Sumit Joshi
+Building the backend API
