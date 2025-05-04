@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<?import javafx.scene.layout.*?>
+<?import javafx.scene.control.*?>
+<?import javafx.geometry.Insets?>
+
+<VBox xmlns="http://javafx.com/javafx"
+      xmlns:fx="http://javafx.com/fxml"
+      fx:controller="com.e2ee.chat.controller.SignupController"
+      styleClass="login-container"
+      alignment="CENTER"
+      spacing="10">
+    
+    <padding>
+        <Insets top="20" right="20" bottom="20" left="20"/>
+    </padding>
+    
+    <Label text="Create Account" styleClass="section-header"/>
+    
+    <TextField fx:id="usernameField" promptText="Username"/>
+    <TextField fx:id="emailField" promptText="Email"/>
+    <PasswordField fx:id="passwordField" promptText="Password"/>
+    <PasswordField fx:id="confirmPasswordField" promptText="Confirm Password"/>
+    
+    <Button fx:id="signupButton" text="Sign Up" maxWidth="Infinity"/>
+    
+    <HBox alignment="CENTER">
+        <Label text="Already have an account? "/>
+        <Hyperlink fx:id="loginLink" text="Login"/>
+    </HBox>
+    
+</VBox> 

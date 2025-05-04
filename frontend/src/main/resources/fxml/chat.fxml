@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<?import javafx.scene.layout.*?>
+<?import javafx.scene.control.*?>
+<?import javafx.geometry.Insets?>
+
+<BorderPane xmlns="http://javafx.com/javafx"
+            xmlns:fx="http://javafx.com/fxml"
+            fx:controller="com.e2ee.chat.controller.ChatController"
+            styleClass="chat-container">
+    
+    <left>
+        <VBox spacing="10" styleClass="user-list">
+            <padding>
+                <Insets top="10" right="10" bottom="10" left="10"/>
+            </padding>
+            
+            <Label text="Online Users" styleClass="section-header"/>
+            <ListView fx:id="userList" VBox.vgrow="ALWAYS"/>
+        </VBox>
+    </left>
+    
+    <center>
+        <VBox spacing="10">
+            <padding>
+                <Insets top="10" right="10" bottom="10" left="10"/>
+            </padding>
+            
+            <ListView fx:id="messageList" VBox.vgrow="ALWAYS"/>
+            
+            <HBox spacing="10">
+                <TextField fx:id="messageInput" HBox.hgrow="ALWAYS"/>
+                <Button fx:id="sendButton" text="Send"/>
+            </HBox>
+        </VBox>
+    </center>
+    
+</BorderPane> 
