@@ -40,10 +40,10 @@ public class DataInitializer {
 
             // Create dummy users
             List<User> users = Arrays.asList(
-                createUser("john_doe", "john@example.com", "password123", passwordEncoder),
-                createUser("jane_smith", "jane@example.com", "password123", passwordEncoder),
-                createUser("alice_johnson", "alice@example.com", "password123", passwordEncoder),
-                createUser("bob_wilson", "bob@example.com", "password123", passwordEncoder)
+                createUser("johndoe", "john@example.com", "password123", passwordEncoder),
+                createUser("janesmith", "jane@example.com", "password123", passwordEncoder),
+                createUser("alicejohnson", "alice@example.com", "password123", passwordEncoder),
+                createUser("bobwilson", "bob@example.com", "password123", passwordEncoder)
             );
             
             // Save users
@@ -56,10 +56,10 @@ public class DataInitializer {
             
             // Create user profiles
             List<UserProfile> profiles = Arrays.asList(
-                createProfile("john_doe", "John Doe", "Software Engineer"),
-                createProfile("jane_smith", "Jane Smith", "Product Manager"),
-                createProfile("alice_johnson", "Alice Johnson", "UX Designer"),
-                createProfile("bob_wilson", "Bob Wilson", "Data Scientist")
+                createProfile("johndoe", "John Doe", "Software Engineer"),
+                createProfile("janesmith", "Jane Smith", "Product Manager"),
+                createProfile("alicejohnson", "Alice Johnson", "UX Designer"),
+                createProfile("bobwilson", "Bob Wilson", "Data Scientist")
             );
             
             // Save profiles
@@ -67,14 +67,14 @@ public class DataInitializer {
             
             // Create dummy messages
             List<ChatMessage> messages = Arrays.asList(
-                createMessage("john_doe", "jane_smith", "Hey Jane, how's the project going?"),
-                createMessage("jane_smith", "john_doe", "Going well! We're on track for the release."),
-                createMessage("alice_johnson", "bob_wilson", "Bob, can you help me with the data visualization?"),
-                createMessage("bob_wilson", "alice_johnson", "Sure, what do you need help with?"),
-                createMessage("john_doe", "alice_johnson", "Alice, I love the new design!"),
-                createMessage("alice_johnson", "john_doe", "Thanks John! Glad you like it."),
-                createMessage("jane_smith", "bob_wilson", "Bob, when can we expect the analytics report?"),
-                createMessage("bob_wilson", "jane_smith", "I'll have it ready by tomorrow morning.")
+                createMessage("johndoe", "janesmith", "Hey Jane, how's the project going?"),
+                createMessage("janesmith", "johndoe", "Going well! We're on track for the release."),
+                createMessage("alicejohnson", "bobwilson", "Bob, can you help me with the data visualization?"),
+                createMessage("bobwilson", "alicejohnson", "Sure, what do you need help with?"),
+                createMessage("johndoe", "alicejohnson", "Alice, I love the new design!"),
+                createMessage("alicejohnson", "johndoe", "Thanks John! Glad you like it."),
+                createMessage("janesmith", "bobwilson", "Bob, when can we expect the analytics report?"),
+                createMessage("bobwilson", "janesmith", "I'll have it ready by tomorrow morning.")
             );
             
             // Save messages

@@ -7,6 +7,8 @@ import com.e2ee.chat.service.ProfileService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
+import java.util.List;
+
 @Service
 @RequiredArgsConstructor
 public class ProfileServiceImpl implements ProfileService {
@@ -51,4 +53,18 @@ public class ProfileServiceImpl implements ProfileService {
         profile.setStatus("Online");
         return profileRepository.save(profile);
     }
-} 
+
+    @Override
+    public UserProfile updateBio(String username, String bio) {
+        UserProfile profile = getProfile(username);
+        profile.setBio(bio);
+        return profileRepository.save(profile);
+    }
+
+    @Override
+    public List<UserProfile> searchUsers(String query) {
+        return profileRepository.findAll().stream()
+                .filter(profile -> profile.getUsername().contains(query) || profile.getDisplayName().contains(query))
+                .toList();
+    }
+}

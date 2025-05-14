@@ -30,7 +30,6 @@ public class AuthController {
     @PostMapping("/login")
     public ResponseEntity<AuthResponse> login(@RequestBody AuthRequest loginRequest) {
         log.debug("Attempting login for user: {}", loginRequest.getUsername());
-        
         try {
             Authentication authentication = authenticationManager.authenticate(
                 new UsernamePasswordAuthenticationToken(
@@ -38,13 +37,21 @@ public class AuthController {
                     loginRequest.getPassword()
                 )
             );
-
             log.debug("Authentication successful for user: {}", loginRequest.getUsername());
+
             SecurityContextHolder.getContext().setAuthentication(authentication);
             String jwt = tokenProvider.generateToken(authentication);
             
-            UserProfile profile = profileService.getProfile(loginRequest.getUsername());
-            log.debug("Generated JWT token and retrieved profile for user: {}", loginRequest.getUsername());
+            User user = userService.findByUsername(loginRequest.getUsername());
+            UserProfile profile;
+            try {
+                profile = profileService.getProfile(loginRequest.getUsername());
+            } catch (RuntimeException e) {
+                // If profile doesn't exist, create one
+                profile = profileService.createProfile(user);
+            }
+            
+            log.debug("Generated JWT token and retrieved/created profile for user: {}", loginRequest.getUsername());
             
             return ResponseEntity.ok(new AuthResponse(jwt, loginRequest.getUsername(), profile.getDisplayName()));
         } catch (Exception e) {

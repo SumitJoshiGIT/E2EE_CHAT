@@ -29,7 +29,7 @@ public class LoginController {
     @FXML
     public void initialize() {
         // Set default credentials
-        usernameField.setText("jane_smith");
+        usernameField.setText("janesmith");
         passwordField.setText("password123");
         
         loginButton.setOnAction(e -> handleLogin());
@@ -72,7 +72,7 @@ public class LoginController {
                 webSocketService.connect();
                 
                 // Load chat view
-                FXMLLoader loader = new FXMLLoader(getClass().getResource("/fxml/chat.fxml"));
+                FXMLLoader loader = new FXMLLoader(ChatController.class.getResource("/fxml/chat.fxml"));
                 Parent root = loader.load();
                 ChatController chatController = loader.getController();
                 chatController.setWebSocketService(webSocketService);
@@ -84,6 +84,7 @@ public class LoginController {
                 stage.setScene(scene);
             }
         } catch (HttpClientErrorException.Forbidden e) {
+            showAlert("Error", e.getMessage());
             showAlert("Error", "Invalid username or password");
         } catch (HttpClientErrorException.Unauthorized e) {
             showAlert("Error", "Unauthorized access");

@@ -13,7 +13,8 @@ public class ChatMessage {
         JOIN,
         LEAVE,
         KEY_EXCHANGE,    // For exchanging encryption keys
-        ENCRYPTED_CHAT   // For encrypted messages
+        ENCRYPTED_CHAT,  // For encrypted messages
+        USER_LIST       // For broadcasting the list of online users
     }
 
     private MessageType type;
@@ -23,6 +24,7 @@ public class ChatMessage {
     private String encryptedKey;      // Encrypted AES key (used in KEY_EXCHANGE)
     private String publicKeyBase64;   // Base64 encoded public key (used in KEY_EXCHANGE)
     private String iv;                // Initialization vector for AES-GCM
+    private String chatId;            // ID of the chat this message belongs to
 
     public ChatMessage(MessageType type, String sender) {
         this.type = type;

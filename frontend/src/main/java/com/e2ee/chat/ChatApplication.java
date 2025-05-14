@@ -12,14 +12,16 @@ import org.springframework.context.ConfigurableApplicationContext;
 @SpringBootApplication
 public class ChatApplication extends Application {
     private ConfigurableApplicationContext springContext;
+    private static String[] args;
     
     public static void main(String[] args) {
+        ChatApplication.args = args;
         launch(args);
     }
     
     @Override
     public void init() {
-        springContext = SpringApplication.run(ChatApplication.class);
+        springContext = SpringApplication.run(ChatApplication.class, args);
     }
     
     @Override
@@ -31,7 +33,8 @@ public class ChatApplication extends Application {
         Scene scene = new Scene(root);
         scene.getStylesheets().add(getClass().getResource("/styles/main.css").toExternalForm());
         
-        primaryStage.setTitle("E2EE Chat");
+        String port = springContext.getEnvironment().getProperty("local.server.port", "unknown");
+        primaryStage.setTitle("E2EE Chat - Port " + port);
         primaryStage.setScene(scene);
         primaryStage.show();
     }

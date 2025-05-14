@@ -16,7 +16,8 @@ public class ChatMessage {
         JOIN,
         LEAVE,
         KEY_EXCHANGE,    // For exchanging encryption keys
-        ENCRYPTED_CHAT   // For encrypted messages
+        ENCRYPTED_CHAT,  // For encrypted messages
+        USER_LIST       // For broadcasting the list of online users
     }
     
     private MessageType type;

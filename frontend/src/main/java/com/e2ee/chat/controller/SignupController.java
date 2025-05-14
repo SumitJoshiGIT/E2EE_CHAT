@@ -62,7 +62,7 @@ public class SignupController {
             HttpEntity<AuthRequest> request = new HttpEntity<>(authRequest, headers);
             
             AuthResponse response = restTemplate.postForObject(
-                "http://localhost:8081/api/auth/register",
+                "http://localhost:8080/api/auth/register",
                 request,
                 AuthResponse.class
             );
