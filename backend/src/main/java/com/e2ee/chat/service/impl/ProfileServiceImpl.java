@@ -12,6 +12,7 @@ import org.slf4j.LoggerFactory;
 
 import java.util.List;
 import java.util.Map;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -73,10 +74,12 @@ public class ProfileServiceImpl implements ProfileService {
     }
 
     @Override
-    public List<Map<String, String>> searchUsers(String query) {
-        logger.debug("searchUsers called with query: {}", query);
+    public List<Map<String, String>> searchUsers(String query, String currentUsername) {
+        logger.debug("searchUsers called with query: {} for user: {}", query, currentUsername);
         List<Map<String, String>> results = profileRepository.findAll().stream()
-                .filter(profile -> profile.getUsername().contains(query) || profile.getDisplayName().contains(query))
+                .filter(profile -> !profile.getUsername().equals(currentUsername)) // Exclude current user
+                .filter(profile -> profile.getUsername().contains(query) || (profile.getDisplayName() != null && profile.getDisplayName().contains(query)))
+                .limit(4) // Limit to 4 results
                 .map(profile -> Map.of(
                     "profileId", String.valueOf(profile.getId()),
                     "username", String.valueOf(profile.getUsername()),
@@ -87,7 +90,7 @@ public class ProfileServiceImpl implements ProfileService {
                     "publicKey", String.valueOf(profile.getPublicKey()),
                     "status", String.valueOf(profile.getStatus())
                 ))
-                .toList();
+                .collect(Collectors.toList());
         logger.debug("searchUsers returning {} results: {}", results.size(), results);
         return results;
     }

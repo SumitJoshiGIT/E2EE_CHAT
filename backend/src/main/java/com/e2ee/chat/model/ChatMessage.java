@@ -25,6 +25,7 @@ public class ChatMessage {
     private String content;           // Plain content or encrypted content
     private LocalDateTime timestamp;
     private String chatId;            // ID of the chat this message belongs to
+    private String clientTempId;      // Original client-side tempId for message deduplication
 
     public ChatMessage() {
         this.timestamp = LocalDateTime.now();
@@ -49,5 +50,13 @@ public class ChatMessage {
         this.chatId = chatId;
         this.content = content;
         this.timestamp = LocalDateTime.now();
+    }
+    
+    public String getClientTempId() {
+        return clientTempId;
+    }
+
+    public void setClientTempId(String clientTempId) {
+        this.clientTempId = clientTempId;
     }
 }

@@ -60,7 +60,7 @@ public class ProfileController {
             @RequestBody String bio) {
         return ResponseEntity.ok(profileService.updateBio(userDetails.getUsername(), bio));
     }
-    
+
     @GetMapping("/id/{profileId}")
     public ResponseEntity<UserProfile> getProfileById(@PathVariable String profileId) {
         try {
@@ -75,7 +75,7 @@ public class ProfileController {
     public ResponseEntity<List<Chat>> searchUsers(
             @AuthenticationPrincipal UserDetails userDetails,
             @RequestParam String query) {
-        List<Map<String, String>> matchingUsers = profileService.searchUsers(query);
+        List<Map<String, String>> matchingUsers = profileService.searchUsers(userDetails.getUsername(), query);
         List<Chat> chats = matchingUsers.stream()
                 .map(userMap -> chatService.createChat(
                         userDetails.getUsername(),

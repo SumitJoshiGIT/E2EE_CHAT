@@ -1,6 +1,7 @@
 package com.e2ee.chat.frontend.model;
 
 import java.time.LocalDateTime;
+import java.util.UUID;
 
 public class ChatMessage {
     private String id;
@@ -21,15 +22,18 @@ public class ChatMessage {
     private LocalDateTime timestamp;
     private String chatId;            // ID of the chat this message belongs to
     private boolean isOwn;            // Helper property for UI - whether the message is from current user
+    private String clientTempId;      // Temporary ID for message deduplication
 
     public ChatMessage() {
         this.timestamp = LocalDateTime.now();
+        this.clientTempId = UUID.randomUUID().toString(); // Generate temp ID for all new messages
     }
 
     public ChatMessage(MessageType type, String senderId) {
         this.type = type;
         this.senderId = senderId;
         this.timestamp = LocalDateTime.now();
+        this.clientTempId = UUID.randomUUID().toString(); // Generate temp ID for all new messages
     }
 
     public ChatMessage(MessageType type, String senderId, String content) {
@@ -37,6 +41,7 @@ public class ChatMessage {
         this.senderId = senderId;
         this.content = content;
         this.timestamp = LocalDateTime.now();
+        this.clientTempId = UUID.randomUUID().toString(); // Generate temp ID for all new messages
     }
 
     public ChatMessage(MessageType type, String senderId, String recipient, String content) {
@@ -44,6 +49,7 @@ public class ChatMessage {
         this.senderId = senderId;
         this.content = content;
         this.timestamp = LocalDateTime.now();
+        this.clientTempId = UUID.randomUUID().toString(); // Generate temp ID for all new messages
     }
     
     // Getters and setters
@@ -104,5 +110,13 @@ public class ChatMessage {
     
     public void setOwn(boolean own) {
         isOwn = own;
+    }
+    
+    public String getClientTempId() {
+        return clientTempId;
+    }
+    
+    public void setClientTempId(String clientTempId) {
+        this.clientTempId = clientTempId;
     }
 }

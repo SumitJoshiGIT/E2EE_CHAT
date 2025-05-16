@@ -303,10 +303,10 @@ public class WebSocketService {
         }
     }
     
-    public void sendMessage(String chatId, String content) {
+    public String sendMessage(String chatId, String content) {
         if (!connected || stompSession == null) {
             System.err.println("[DEBUG] sendMessage: Not connected to WebSocket server");
-            return;
+            return null;
         }
         System.out.println("[DEBUG] sendMessage: Preparing to send message");
         System.out.println("[DEBUG] sendMessage: Sender (username): " + username);
@@ -314,6 +314,9 @@ public class WebSocketService {
         System.out.println("[DEBUG] sendMessage: chatId: " + chatId);
         System.out.println("[DEBUG] sendMessage: Content: " + content);
         System.out.println("[DEBUG] sendMessage: Endpoint: " + SEND_ENDPOINT);
+
+        // Generate a client-side temporary ID for deduplication
+        String clientTempId = UUID.randomUUID().toString();
 
         // Create a map with field names that match the backend model
         Map<String, Object> messageMap = new HashMap<>();
@@ -323,6 +326,7 @@ public class WebSocketService {
         messageMap.put("chatId", chatId);
         messageMap.put("content", content);
         messageMap.put("timestamp", LocalDateTime.now());
+        messageMap.put("clientTempId", clientTempId); // Add the client temp ID
 
         try {
             System.out.println("[DEBUG] sendMessage: Message map: " + messageMap);
@@ -330,16 +334,18 @@ public class WebSocketService {
             System.out.println("[DEBUG] sendMessage: JSON payload: " + jsonPayload);
             stompSession.send(SEND_ENDPOINT, jsonPayload.getBytes(StandardCharsets.UTF_8));
             System.out.println("[DEBUG] sendMessage: Message sent successfully");
+            return clientTempId;
         } catch (Exception e) {
             System.err.println("[DEBUG] sendMessage: Error serializing or sending message: " + e.getMessage());
             e.printStackTrace();
+            return null;
         }
     }
 
-    public void sendEncryptedMessage(String chatId, String encryptedContent, String encryptedKey, String iv) {
+    public String sendEncryptedMessage(String chatId, String encryptedContent, String encryptedKey, String iv) {
         if (!connected || stompSession == null) {
             System.err.println("[DEBUG] sendEncryptedMessage: Not connected to WebSocket server");
-            return;
+            return null;
         }
         System.out.println("[DEBUG] sendEncryptedMessage: Preparing to send encrypted message");
         System.out.println("[DEBUG] sendEncryptedMessage: Sender (username): " + username);
@@ -349,6 +355,9 @@ public class WebSocketService {
         System.out.println("[DEBUG] sendEncryptedMessage: EncryptedKey: " + encryptedKey);
         System.out.println("[DEBUG] sendEncryptedMessage: IV: " + iv);
         System.out.println("[DEBUG] sendEncryptedMessage: Endpoint: " + SEND_ENDPOINT);
+
+        // Generate a client-side temporary ID for deduplication
+        String clientTempId = UUID.randomUUID().toString();
 
         // Create a map with field names that match the backend model
         Map<String, Object> messageMap = new HashMap<>();
@@ -361,6 +370,7 @@ public class WebSocketService {
         // Add encryption-related fields if the backend model supports them
         messageMap.put("encryptedKey", encryptedKey);
         messageMap.put("iv", iv);
+        messageMap.put("clientTempId", clientTempId); // Add the client temp ID
 
         try {
             System.out.println("[DEBUG] sendEncryptedMessage: Message map: " + messageMap);
@@ -368,9 +378,11 @@ public class WebSocketService {
             System.out.println("[DEBUG] sendEncryptedMessage: JSON payload: " + jsonPayload);
             stompSession.send(SEND_ENDPOINT, jsonPayload.getBytes(StandardCharsets.UTF_8));
             System.out.println("[DEBUG] sendEncryptedMessage: Encrypted message sent successfully");
+            return clientTempId;
         } catch (Exception e) {
             System.err.println("[DEBUG] sendEncryptedMessage: Error serializing or sending encrypted message: " + e.getMessage());
             e.printStackTrace();
+            return null;
         }
     }
 
@@ -695,8 +707,42 @@ public class WebSocketService {
                                     message.setContent((String) messageData.get("content"));
                                     message.setChatId(chatId);
                                     
+                                    // Extract and set clientTempId for deduplication
+                                    if (messageData.containsKey("clientTempId")) {
+                                        message.setClientTempId((String) messageData.get("clientTempId"));
+                                        System.out.println("WEBSOCKET DEBUG: Setting clientTempId: " + message.getClientTempId());
+                                    }
+                                    
                                     // Check if this message was sent by the current user
-                                    if (message.getSenderId().equals(username)) {
+                                    if (message.getSenderId().equals(userId)) {
+                                        message.setOwn(true);
+                                    }
+                                    
+                                    handleChatMessage(message);
+                                }
+                                break;
+                            case "ENCRYPTED_CHAT":
+                                System.out.println("WEBSOCKET DEBUG: Processing ENCRYPTED_CHAT type message");
+                                // This is a new encrypted message sent to a chat
+                                if (messageMap.containsKey("chatId")) {
+                                    String chatId = (String) messageMap.get("chatId");
+                                    
+                                    Map<String, Object> messageData = (Map<String, Object>) messageMap;
+                                    
+                                    ChatMessage message = new ChatMessage();
+                                    message.setType(ChatMessage.MessageType.ENCRYPTED_CHAT);
+                                    message.setSenderId((String) messageData.get("senderId"));
+                                    message.setContent((String) messageData.get("content"));
+                                    message.setChatId(chatId);
+                                    
+                                    // Extract and set clientTempId for deduplication
+                                    if (messageData.containsKey("clientTempId")) {
+                                        message.setClientTempId((String) messageData.get("clientTempId"));
+                                        System.out.println("WEBSOCKET DEBUG: Setting clientTempId for encrypted message: " + message.getClientTempId());
+                                    }
+                                    
+                                    // Check if this message was sent by the current user
+                                    if (message.getSenderId().equals(userId)) {
                                         message.setOwn(true);
                                     }
                                     

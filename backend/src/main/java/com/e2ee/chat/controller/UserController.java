@@ -12,6 +12,7 @@ import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 
+import java.security.Principal; // Added for getting current user
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
@@ -33,18 +34,22 @@ public class UserController {
     }
     
     @GetMapping("/search")
-    public ResponseEntity<List<Map<String, String>>> searchUsers(@RequestParam(name = "q", required = false) String query) {
+    public ResponseEntity<List<Map<String, String>>> searchUsers(@RequestParam(name = "q", required = false) String query, Principal principal) { // Added Principal
+        String currentUsername = principal.getName(); // Get current username
         if (query == null || query.trim().isEmpty()) {
-            return ResponseEntity.ok(profileService.searchUsers(""));
+            // Pass currentUsername to service method, adjust if empty query should return all others or nothing
+            return ResponseEntity.ok(profileService.searchUsers("", currentUsername)); 
         }
-        return ResponseEntity.ok(profileService.searchUsers(query.trim()));
+        return ResponseEntity.ok(profileService.searchUsers(query.trim(), currentUsername));
     }
     
     @GetMapping("/online")
-    public ResponseEntity<List<Map<String, String>>> getOnlineUsers() {
-        // Get all profiles and filter by status
-        List<Map<String, String>> onlineUsers = profileService.searchUsers("").stream()
+    public ResponseEntity<List<Map<String, String>>> getOnlineUsers(Principal principal) { // Added Principal
+        String currentUsername = principal.getName(); // Get current username
+        // Get all profiles and filter by status, excluding the current user
+        List<Map<String, String>> onlineUsers = profileService.searchUsers("", currentUsername).stream() // Pass currentUsername
             .filter(profile -> "Online".equalsIgnoreCase(profile.get("status")))
+            // No need to filter out current user here as searchUsers already does it
             .toList();
         return ResponseEntity.ok(onlineUsers);
     }

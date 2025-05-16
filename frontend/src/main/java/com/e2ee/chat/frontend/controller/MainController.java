@@ -72,6 +72,9 @@ public class MainController implements Initializable {
     // Store user profiles for chat display
     private Map<String, UserProfile> userProfiles = new HashMap<>();
     
+    // Store pending messages by clientTempId for deduplication
+    private Map<String, ChatMessage> pendingMessages = new HashMap<>();
+    
     @Override
     public void initialize(URL location, ResourceBundle resources) {
         authService = E2EEChatFrontendApplication.getAuthService();
@@ -125,40 +128,38 @@ public class MainController implements Initializable {
     private void selectChat(Chat chat) {
         currentChat = chat;
         
-        // Clear and load messages for this chat
         messages.clear();
-        messages.addAll(chat.getMessages());
+        if (chat.getMessages() != null) { // Guard against null messages list
+            messages.addAll(chat.getMessages());
+        }
         
-        // Scroll to most recent message
         if (!messages.isEmpty()) {
             messageListView.scrollTo(messages.size() - 1);
         }
         
-        // Update UI
         messageField.setDisable(false);
         sendButton.setDisable(false);
         
-        // Get the display name for the chat
-        String displayName = chat.getTargetUserId();
+        String displayName = chat.getTargetUsername(); // Primarily rely on this
         String targetId = chat.getTargetUserId();
 
-        // Try to fetch profile if not in cache
-        if (targetId != null && fetchUserProfileIfNeeded(targetId)) {
-            UserProfile targetProfile = userProfiles.get(targetId);
-            if (targetProfile != null) {
-                if (targetProfile.getDisplayName() != null && !targetProfile.getDisplayName().isEmpty()) {
-                    displayName = targetProfile.getDisplayName();
-                } else if (targetProfile.getUsername() != null && !targetProfile.getUsername().isEmpty()) {
-                    displayName = targetProfile.getUsername();
-                }
-            }
+        // If chat.getTargetUsername() is still the ID, or null/empty/"null", make one last attempt to resolve.
+        if (targetId != null && (displayName == null || displayName.isEmpty() || displayName.equalsIgnoreCase("null") || displayName.equals(targetId))) {
+            System.out.println("[SELECT_CHAT] Name for " + targetId + " is not optimal ('" + displayName + "'). Attempting fetch.");
+            fetchUserProfileIfNeeded(targetId); // This will update chat.setTargetUsername()
+            displayName = chat.getTargetUsername(); // Re-fetch from chat object, which should now be updated.
+            System.out.println("[SELECT_CHAT] After fetch, new displayName for " + targetId + ": '" + displayName + "'");
         }
         
+        // Final fallback if displayName is still not good
+        if (displayName == null || displayName.isEmpty() || displayName.equalsIgnoreCase("null") || (targetId != null && displayName.equals(targetId)) ) {
+            displayName = (targetId != null && !targetId.isEmpty()) ? targetId : "Unknown User";
+            System.out.println("[SELECT_CHAT] Fallback displayName for " + targetId + " set to: '" + displayName + "'");
+        }
+
         currentChatLabel.setText("Chat with: " + displayName);
         
-        // Check if we have a shared key for this chat
         if (!chatKeys.containsKey(chat.getChatId())) {
-            // If the other user has shared their public key, create and send an AES key
             if (chat.getTargetPublicKey() != null && !chat.getTargetPublicKey().isEmpty()) {
                 sendKeyExchange(chat);
             }
@@ -222,8 +223,33 @@ public class MainController implements Initializable {
         System.out.println("Message content: " + message.getContent());
         System.out.println("Message type: " + message.getType());
         System.out.println("Current chatId: " + (currentChat != null ? currentChat.getChatId() : "null"));
+        System.out.println("Message clientTempId: " + message.getClientTempId());
 
         Platform.runLater(() -> {
+            // First check if this is a duplicate message (same clientTempId)
+            String clientTempId = message.getClientTempId();
+            if (clientTempId != null && !clientTempId.isEmpty() && pendingMessages.containsKey(clientTempId)) {
+                System.out.println("Found duplicate message with clientTempId: " + clientTempId);
+                System.out.println("Pending messages map contains: " + pendingMessages.keySet());
+                
+                // This is our own message being echoed back, no need to add it again
+                // We can update the server-assigned ID if needed
+                ChatMessage existingMessage = pendingMessages.get(clientTempId);
+                existingMessage.setId(message.getId());
+                
+                // Remove from pending messages as it's been acknowledged
+                pendingMessages.remove(clientTempId);
+                System.out.println("Removed message from pending messages. Remaining: " + pendingMessages.size());
+                
+                // Skip further processing
+                return;
+            } else if (clientTempId != null && !clientTempId.isEmpty()) {
+                System.out.println("Received message with clientTempId: " + clientTempId + " but not found in pending messages");
+                System.out.println("Pending messages keys: " + pendingMessages.keySet());
+            } else {
+                System.out.println("Received message with no clientTempId");
+            }
+
             // Check if this is for the current chat
             if (currentChat != null && message.getChatId().equals(currentChat.getChatId())) {
                 // If encrypted, try to decrypt
@@ -274,6 +300,17 @@ public class MainController implements Initializable {
 
             chats.clear();
             chats.addAll(validChats);
+
+            // For each chat, ensure its targetUsername is properly set by fetching profile if needed
+            for (Chat chat : chats) { // Iterate over the 'chats' collection that was just updated
+                // Check if targetUsername is null, empty, or still the placeholder (targetUserId)
+                if (chat.getTargetUserId() != null && 
+                    (chat.getTargetUsername() == null || 
+                     chat.getTargetUsername().isEmpty() || 
+                     chat.getTargetUsername().equals(chat.getTargetUserId()))) {
+                    fetchUserProfileIfNeeded(chat.getTargetUserId());
+                }
+            }
             chatListView.refresh();
 
             // If we have chats but none is selected, select the first one
@@ -318,38 +355,42 @@ public class MainController implements Initializable {
      * @return True if the profile was fetched or already exists, false otherwise
      */
     private boolean fetchUserProfileIfNeeded(String profileId) {
-        // If already in cache, nothing to do
-        if (userProfiles.containsKey(profileId)) {
-            return true;
-        }
-        
-        // Skip if profileId is null or empty
         if (profileId == null || profileId.isEmpty()) {
-            System.out.println("Cannot fetch profile for null or empty ID");
+            System.out.println("[FETCH_PROFILE] Cannot fetch profile for null or empty ID");
             return false;
         }
-        
-        System.out.println("Fetching user profile for ID: " + profileId);
-        
-        // Fetch from server
-        UserProfile profile = authService.getUserProfileById(profileId);
+
+        System.out.println("[FETCH_PROFILE] Attempting to fetch user profile for ID: " + profileId);
+        UserProfile profile = authService.getUserProfileById(profileId); // Network call
+
         if (profile != null) {
-            userProfiles.put(profileId, profile);
-            
-            // Update any matching chats with the username
+            System.out.println("[FETCH_PROFILE] Fetched profile for " + profileId + ": Username='" + profile.getUsername() + "', DisplayName='" + profile.getDisplayName() + "'");
+            userProfiles.put(profileId, profile); // Cache the fetched profile
+
+            String bestName = profile.getDisplayName();
+            if (bestName == null || bestName.isEmpty() || bestName.equalsIgnoreCase("null")) {
+                bestName = profile.getUsername();
+            }
+            // If still no good name, use profileId as the ultimate fallback.
+            if (bestName == null || bestName.isEmpty() || bestName.equalsIgnoreCase("null")) {
+                bestName = profileId;
+            }
+            System.out.println("[FETCH_PROFILE] Determined bestName for " + profileId + ": '" + bestName + "'");
+
+            boolean changed = false;
             for (Chat chat : chats) {
                 if (chat.getTargetUserId() != null && chat.getTargetUserId().equals(profileId)) {
-                    chat.setTargetUsername(profile.getUsername());
+                    if (!bestName.equals(chat.getTargetUsername())) {
+                        System.out.println("[FETCH_PROFILE] Updating chat ("+chat.getChatId()+") targetUsername for " + profileId + " from '" + chat.getTargetUsername() + "' to: '" + bestName + "'");
+                        chat.setTargetUsername(bestName);
+                        changed = true;
+                    }
                 }
             }
-            
-            // Refresh chat list to show updated names
-            Platform.runLater(() -> chatListView.refresh());
-            
+            // If changes were made, the list view will be refreshed by the caller (e.g., updateChatList or selectChat)
             return true;
         }
-        
-        System.out.println("Failed to fetch profile for ID: " + profileId);
+        System.out.println("[FETCH_PROFILE] Failed to fetch profile for ID: " + profileId + ". UserProfile is null from authService.");
         return false;
     }
     
@@ -361,12 +402,14 @@ public class MainController implements Initializable {
         // Check if we have a shared key for encryption
         SecretKey key = chatKeys.get(currentChat.getChatId());
         
+        String clientTempId = null;
+        
         if (key != null) {
             // Encrypt the message
             CryptoUtils.EncryptionResult encResult = CryptoUtils.encryptMessage(message, key);
             
             // Send encrypted message
-            webSocketService.sendEncryptedMessage(
+            clientTempId = webSocketService.sendEncryptedMessage(
                 currentChat.getTargetUserId(),
                 encResult.getEncryptedData(),
                 "",  // No need to send encrypted key for each message
@@ -374,12 +417,17 @@ public class MainController implements Initializable {
             );
         } else {
             // If no shared key yet, send plain message
-            webSocketService.sendMessage(currentChat.getChatId(), message);
+            clientTempId = webSocketService.sendMessage(currentChat.getChatId(), message);
             
             // And try to initiate key exchange
             if (currentChat.getTargetPublicKey() != null && !currentChat.getTargetPublicKey().isEmpty()) {
                 sendKeyExchange(currentChat);
             }
+        }
+        
+        // If clientTempId is null, generate a new one (should not happen if WebSocket is connected)
+        if (clientTempId == null) {
+            clientTempId = java.util.UUID.randomUUID().toString();
         }
         
         // Add to local display (showing unencrypted version)
@@ -389,6 +437,12 @@ public class MainController implements Initializable {
         localMessage.setContent(message);  // Show the unencrypted version locally
         localMessage.setTimestamp(LocalDateTime.now());
         localMessage.setOwn(true);
+        localMessage.setClientTempId(clientTempId);  // Set the client temp ID
+        
+        // Track this message for deduplication
+        pendingMessages.put(clientTempId, localMessage);
+        System.out.println("Added message to pendingMessages with clientTempId: " + clientTempId);
+        System.out.println("pendingMessages now contains " + pendingMessages.size() + " messages");
         
         // Add to current messages
         messages.add(localMessage);
@@ -559,35 +613,24 @@ public class MainController implements Initializable {
         @Override
         protected void updateItem(Chat item, boolean empty) {
             super.updateItem(item, empty);
-            
+
             if (empty || item == null) {
                 setText(null);
                 setGraphic(null);
             } else {
-                // Try to get a nice display name from the userProfiles map
-                String displayName = item.getTargetUserId();
+                String displayName = item.getTargetUsername(); // This should be the best name or targetId
                 String targetId = item.getTargetUserId();
-                
-                // Try to fetch profile if not in cache
-                if (targetId != null && fetchUserProfileIfNeeded(targetId)) {
-                    UserProfile targetProfile = userProfiles.get(targetId);
-                    if (targetProfile != null) {
-                        // Use display name if available, otherwise username
-                        if (targetProfile.getDisplayName() != null && !targetProfile.getDisplayName().isEmpty()) {
-                            displayName = targetProfile.getDisplayName();
-                        } else if (targetProfile.getUsername() != null && !targetProfile.getUsername().isEmpty()) {
-                            displayName = targetProfile.getUsername();
-                        }
-                    }
+
+                // If displayName is still null, empty, the literal string "null", or the targetId itself
+                if (displayName == null || displayName.isEmpty() || displayName.equalsIgnoreCase("null") || (targetId != null && displayName.equals(targetId))) {
+                    // Attempt to use targetId if displayName is unsatisfactory and targetId is available
+                    displayName = (targetId != null && !targetId.isEmpty()) ? targetId : "Unknown User";
                 }
-                
+                // At this point, displayName should be a usable string (actual name, ID, or "Unknown User").
+
                 nameLabel.setText(displayName);
-                previewLabel.setText(item.getLastMessagePreview());
-                
-                // Update online status
-                statusIndicator.setFill(item.isTargetUserOnline() ? 
-                    javafx.scene.paint.Color.GREEN : javafx.scene.paint.Color.LIGHTGRAY);
-                
+                previewLabel.setText(item.getLastMessagePreview() != null ? item.getLastMessagePreview() : "");
+                statusIndicator.setFill(item.isTargetUserOnline() ? javafx.scene.paint.Color.GREEN : javafx.scene.paint.Color.LIGHTGRAY);
                 setGraphic(content);
             }
         }

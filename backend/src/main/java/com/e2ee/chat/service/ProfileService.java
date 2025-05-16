@@ -14,5 +14,5 @@ public interface ProfileService {
     UserProfile updatePublicKey(String username, String publicKey);
     UserProfile createProfile(User user);
     UserProfile updateBio(String username, String bio);
-    List<Map<String, String>> searchUsers(String query);
+    List<Map<String, String>> searchUsers(String query, String currentUsername);
 }

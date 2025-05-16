@@ -291,6 +291,7 @@ public class ChatMessageHandler {
             objectMapper.findAndRegisterModules(); // For handling Java 8 date/time
             message = objectMapper.readValue(jsonPayload, Message.class);
             log.debug("[sendMessage] Successfully parsed message: {}", message);
+            log.info("[sendMessage] Parsed Message clientTempId: {}", message.getClientTempId());
         } catch (Exception e) {
             log.error("[sendMessage] Failed to parse JSON: {}", e.getMessage(), e);
             return;
@@ -316,6 +317,9 @@ public class ChatMessageHandler {
         chatService.saveMessage(message);
         chatService.updateChatPreview(chatId, message.getContent());
 
+        // Extra debugging
+        log.info("[sendMessage] Message clientTempId before conversion: {}", message.getClientTempId());
+
         // Convert Message to ChatMessage before sending
         ChatMessage chatMessageToSend = new ChatMessage();
         chatMessageToSend.setId(message.getMessageId());
@@ -323,6 +327,10 @@ public class ChatMessageHandler {
         chatMessageToSend.setSenderId(message.getSenderId());
         chatMessageToSend.setContent(message.getContent());
         chatMessageToSend.setTimestamp(message.getTimestamp());
+        chatMessageToSend.setClientTempId(message.getClientTempId()); // Copy clientTempId for message deduplication
+        
+        // Extra debugging
+        log.info("[sendMessage] ChatMessage clientTempId after conversion: {}", chatMessageToSend.getClientTempId());
 
         // Determine ChatMessage.MessageType based on Message.messageType
         ChatMessage.MessageType targetType = ChatMessage.MessageType.MESSAGE; // Default

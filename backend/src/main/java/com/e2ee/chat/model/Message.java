@@ -23,6 +23,7 @@ public class Message {
     private String mimeType; // For file attachments
     private String status = "SENT"; // SENT, DELIVERED, READ
     private List<String> readBy = new ArrayList<>(); // List of user IDs who have read the message
+    private String clientTempId; // Client-generated temporary ID for message deduplication
     
     // Constructor for text messages
     public Message() {

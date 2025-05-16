@@ -18,6 +18,7 @@ public class Chat {
     private String targetUserId;
     private String targetPublicKey;
     private String ownerId;
+    private String sharedSecret; // Added for E2EE
     
     // JavaFX properties for UI binding
     private final StringProperty targetUsername = new SimpleStringProperty();
@@ -114,6 +115,14 @@ public class Chat {
     
     public void setOwnerId(String ownerId) {
         this.ownerId = ownerId;
+    }
+    
+    public String getSharedSecret() { // Added for E2EE
+        return sharedSecret;
+    }
+
+    public void setSharedSecret(String sharedSecret) { // Added for E2EE
+        this.sharedSecret = sharedSecret;
     }
     
     public String getTargetUsername() {
