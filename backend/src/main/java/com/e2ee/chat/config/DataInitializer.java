@@ -6,12 +6,12 @@ import com.e2ee.chat.model.UserProfile;
 import com.e2ee.chat.repository.UserRepository;
 import com.e2ee.chat.repository.MessageRepository;
 import com.e2ee.chat.repository.UserProfileRepository;
+import com.e2ee.chat.repository.ChatRepository;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.CommandLineRunner;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.security.crypto.password.PasswordEncoder;
-import java.time.LocalDateTime;
 import java.util.Arrays;
 import java.util.List;
 
@@ -23,64 +23,81 @@ public class DataInitializer {
     CommandLineRunner initDatabase(UserRepository userRepository, 
                                  MessageRepository messageRepository,
                                  UserProfileRepository profileRepository,
+                                 ChatRepository chatRepository, // Added ChatRepository
                                  PasswordEncoder passwordEncoder) {
         return args -> {
-            log.info("Initializing database...");
+            log.info("Checking if database needs initialization...");
             
-            // Test password encoding
-            String testPassword = "password123";
-            String encodedPassword = passwordEncoder.encode(testPassword);
-            log.info("Password encoding test: raw={}, encoded={}", testPassword, encodedPassword);
-            log.info("Password verification test: {}", passwordEncoder.matches(testPassword, encodedPassword));
-            
-            // Clear existing data
-            userRepository.deleteAll();
-            profileRepository.deleteAll();
-            messageRepository.deleteAll();
+            // Clear all chats
+            log.info("Clearing all chats...");
+            chatRepository.deleteAll();
+            log.info("All chats cleared.");
 
-            // Create dummy users
-            List<User> users = Arrays.asList(
-                createUser("johndoe", "john@example.com", "password123", passwordEncoder),
-                createUser("janesmith", "jane@example.com", "password123", passwordEncoder),
-                createUser("alicejohnson", "alice@example.com", "password123", passwordEncoder),
-                createUser("bobwilson", "bob@example.com", "password123", passwordEncoder)
-            );
-            
-            // Save users
-            userRepository.saveAll(users);
-            
-            // Log user details for verification
-            users.forEach(user -> {
-                log.info("Created user: username={}, password={}", user.getUsername(), user.getPassword());
-            });
-            
-            // Create user profiles
-            List<UserProfile> profiles = Arrays.asList(
-                createProfile("johndoe", "John Doe", "Software Engineer"),
-                createProfile("janesmith", "Jane Smith", "Product Manager"),
-                createProfile("alicejohnson", "Alice Johnson", "UX Designer"),
-                createProfile("bobwilson", "Bob Wilson", "Data Scientist")
-            );
-            
-            // Save profiles
-            profileRepository.saveAll(profiles);
-            
-            // Create dummy messages
-            List<ChatMessage> messages = Arrays.asList(
-                createMessage("johndoe", "janesmith", "Hey Jane, how's the project going?"),
-                createMessage("janesmith", "johndoe", "Going well! We're on track for the release."),
-                createMessage("alicejohnson", "bobwilson", "Bob, can you help me with the data visualization?"),
-                createMessage("bobwilson", "alicejohnson", "Sure, what do you need help with?"),
-                createMessage("johndoe", "alicejohnson", "Alice, I love the new design!"),
-                createMessage("alicejohnson", "johndoe", "Thanks John! Glad you like it."),
-                createMessage("janesmith", "bobwilson", "Bob, when can we expect the analytics report?"),
-                createMessage("bobwilson", "janesmith", "I'll have it ready by tomorrow morning.")
-            );
-            
-            // Save messages
-            messageRepository.saveAll(messages);
-            
-            log.info("Database initialization completed.");
+            // Only initialize if the database is empty
+            if (userRepository.count() == 0) {
+                log.info("Database is empty. Initializing with sample data...");
+                
+                // Create dummy users
+                List<User> users = Arrays.asList(
+                    createUser("johndoe", "john@example.com", "password123", passwordEncoder),
+                    createUser("janesmith", "jane@example.com", "password123", passwordEncoder),
+                    createUser("alicejohnson", "alice@example.com", "password123", passwordEncoder),
+                    createUser("bobwilson", "bob@example.com", "password123", passwordEncoder)
+                );
+                
+                // Save users
+                userRepository.saveAll(users);
+                
+                // Log user details for verification
+                users.forEach(user -> {
+                    log.info("Created user: username={}, password={}", user.getUsername(), user.getPassword());
+                });
+                
+                // Create user profiles
+                List<UserProfile> profiles = Arrays.asList(
+                    createProfile("johndoe", "John Doe", "Software Engineer"),
+                    createProfile("janesmith", "Jane Smith", "Product Manager"),
+                    createProfile("alicejohnson", "Alice Johnson", "UX Designer"),
+                    createProfile("bobwilson", "Bob Wilson", "Data Scientist")
+                );
+                
+                // Set user reference in profiles before saving
+                for (User user : users) {
+                    UserProfile profile = profiles.stream()
+                        .filter(p -> p.getUsername().equals(user.getUsername()))
+                        .findFirst()
+                        .orElse(null);
+                    if (profile != null) {
+                        profile.setUser(user);
+                    }
+                }
+
+                // Save profiles
+                profileRepository.saveAll(profiles);
+                
+                // Ensure profiles are created for all users
+                users.forEach(user -> {
+                    UserProfile profile = profileRepository.findByUsername(user.getUsername())
+                        .orElseGet(() -> {
+                            UserProfile newProfile = new UserProfile();
+                            newProfile.setUsername(user.getUsername());
+                            newProfile.setDisplayName(user.getUsername());
+                            newProfile.setStatus("Online");
+                            newProfile.setUser(user); // Set user reference here too
+                            return profileRepository.save(newProfile);
+                        });
+                    user.setProfile(profile);
+                    userRepository.save(user);
+                });
+                
+                log.info("Database initialization completed.");
+            } else {
+                log.info("Database already contains data, skipping initialization.");
+                // Clear all chat messages
+                log.info("Clearing all chat messages...");
+                messageRepository.deleteAll();
+                log.info("All chat messages cleared.");
+            }
         };
     }
     
@@ -105,13 +122,4 @@ public class DataInitializer {
         return profile;
     }
     
-    private ChatMessage createMessage(String sender, String recipient, String content) {
-        ChatMessage message = new ChatMessage();
-        message.setType(ChatMessage.MessageType.CHAT);
-        message.setSender(sender);
-        message.setRecipient(recipient);
-        message.setContent(content);
-        message.setTimestamp(LocalDateTime.now());
-        return message;
-    }
-} 
+}

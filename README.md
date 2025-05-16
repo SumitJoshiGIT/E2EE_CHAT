@@ -29,6 +29,54 @@ A secure, end-to-end encrypted chat application that allows users to communicate
 ## Prerequisites
 
 - Java 17 or higher
+- MongoDB (4.4 or higher)
+- Maven 3.6+
+- A modern web browser (for WebSocket support)
+
+## Getting Started
+
+### Installation and Setup
+
+1. Clone the repository
+   ```
+   git clone https://github.com/yourusername/e2ee-chat.git
+   cd e2ee-chat
+   ```
+
+2. Make sure MongoDB is running
+   ```
+   # Check status
+   sudo systemctl status mongodb
+   
+   # If not running, start MongoDB
+   sudo systemctl start mongodb
+   ```
+
+3. Build and run the backend
+   ```
+   cd backend
+   ./mvnw clean package
+   java -jar target/e2ee-chat-0.0.1-SNAPSHOT.jar
+   ```
+
+4. Build and run the frontend (in a separate terminal)
+   ```
+   cd frontend
+   ./build.sh
+   ```
+
+Alternatively, you can use the provided startup script:
+```
+chmod +x start.sh
+./start.sh
+```
+
+### Configuration
+
+The default configuration is stored in `backend/src/main/resources/application.properties`. You can override settings by:
+
+1. Creating an `application-dev.properties` file in the same directory
+2. Running the app with: `java -jar target/e2ee-chat-0.0.1-SNAPSHOT.jar --spring.profiles.active=dev`
 - Maven
 - MongoDB
 - JavaFX SDK

@@ -2,7 +2,9 @@ package com.e2ee.chat.service.impl;
 
 import com.e2ee.chat.dto.AuthRequest;
 import com.e2ee.chat.model.User;
+import com.e2ee.chat.model.UserProfile;
 import com.e2ee.chat.repository.UserRepository;
+import com.e2ee.chat.repository.UserProfileRepository;
 import com.e2ee.chat.service.UserService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -15,6 +17,7 @@ import java.util.List;
 public class UserServiceImpl implements UserService {
 
     private final UserRepository userRepository;
+    private final UserProfileRepository userProfileRepository;
     private final PasswordEncoder passwordEncoder;
 
     @Override
@@ -39,4 +42,13 @@ public class UserServiceImpl implements UserService {
     public List<User> getAllUsers() {
         return userRepository.findAll();
     }
-} 
+    
+    @Override
+    public List<UserProfile> searchUsers(String query) {
+        String lowercaseQuery = query.toLowerCase();
+        return userProfileRepository.findAll().stream()
+                .filter(profile -> profile.getUsername().toLowerCase().contains(lowercaseQuery)
+                        || (profile.getDisplayName() != null && profile.getDisplayName().toLowerCase().contains(lowercaseQuery)))
+                .toList();
+    }
+}

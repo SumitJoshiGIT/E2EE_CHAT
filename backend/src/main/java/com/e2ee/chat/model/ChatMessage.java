@@ -12,7 +12,7 @@ public class ChatMessage {
     private String id;
     
     public enum MessageType {
-        CHAT,
+        MESSAGE,
         JOIN,
         LEAVE,
         KEY_EXCHANGE,    // For exchanging encryption keys
@@ -21,36 +21,33 @@ public class ChatMessage {
     }
     
     private MessageType type;
-    private String sender;
-    private String recipient;
+    private String senderId; // Replacing sender with senderId
     private String content;           // Plain content or encrypted content
-    private String encryptedKey;      // Encrypted AES key (used in KEY_EXCHANGE)
-    private String publicKeyBase64;   // Base64 encoded public key (used in KEY_EXCHANGE)
-    private String iv;                // Initialization vector for AES-GCM
     private LocalDateTime timestamp;
+    private String chatId;            // ID of the chat this message belongs to
 
     public ChatMessage() {
         this.timestamp = LocalDateTime.now();
     }
 
-    public ChatMessage(MessageType type, String sender) {
+    public ChatMessage(MessageType type, String senderId) {
         this.type = type;
-        this.sender = sender;
+        this.senderId = senderId;
         this.timestamp = LocalDateTime.now();
     }
 
-    public ChatMessage(MessageType type, String sender, String content) {
+    public ChatMessage(MessageType type, String senderId, String content) {
         this.type = type;
-        this.sender = sender;
+        this.senderId = senderId;
         this.content = content;
         this.timestamp = LocalDateTime.now();
     }
 
-    public ChatMessage(MessageType type, String sender, String recipient, String content) {
+    public ChatMessage(MessageType type, String senderId, String chatId, String content) {
         this.type = type;
-        this.sender = sender;
-        this.recipient = recipient;
+        this.senderId = senderId;
+        this.chatId = chatId;
         this.content = content;
         this.timestamp = LocalDateTime.now();
     }
-} 
+}

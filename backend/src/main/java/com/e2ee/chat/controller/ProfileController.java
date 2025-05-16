@@ -9,6 +9,7 @@ import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
+import java.util.Map;
 
 import com.e2ee.chat.model.Chat;
 import com.e2ee.chat.service.ChatService;
@@ -59,14 +60,27 @@ public class ProfileController {
             @RequestBody String bio) {
         return ResponseEntity.ok(profileService.updateBio(userDetails.getUsername(), bio));
     }
+    
+    @GetMapping("/id/{profileId}")
+    public ResponseEntity<UserProfile> getProfileById(@PathVariable String profileId) {
+        try {
+            UserProfile profile = profileService.getProfileById(profileId);
+            return ResponseEntity.ok(profile);
+        } catch (Exception e) {
+            return ResponseEntity.notFound().build();
+        }
+    }
 
     @GetMapping("/search")
     public ResponseEntity<List<Chat>> searchUsers(
             @AuthenticationPrincipal UserDetails userDetails,
             @RequestParam String query) {
-        List<UserProfile> matchingUsers = profileService.searchUsers(query);
+        List<Map<String, String>> matchingUsers = profileService.searchUsers(query);
         List<Chat> chats = matchingUsers.stream()
-                .map(user -> chatService.createChat(userDetails.getUsername(), user.getUsername(), user.getPublicKey()))
+                .map(userMap -> chatService.createChat(
+                        userDetails.getUsername(),
+                        userMap.get("username"),
+                        userMap.get("publicKey")))
                 .toList();
         return ResponseEntity.ok(chats);
     }

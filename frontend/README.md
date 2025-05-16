@@ -1,76 +1,66 @@
 # E2EE Chat Frontend
 
-A JavaFX-based frontend for the E2EE Chat application.
+This is the frontend for an End-to-End Encrypted Chat application built with JavaFX. It provides a secure messaging platform where messages are encrypted on the sender's device and can only be decrypted on the recipient's device.
 
-## Prerequisites
+## Features
 
-- Java 17 or later
-- Maven 3.6.0 or later
+- User registration and login
+- Contact search
+- Real-time messaging
+- End-to-End encryption with RSA and AES
+- Secure key exchange
+- Online/offline status indicators
 
-## Building the Application
+## Architecture
 
-To build the application, run:
+The frontend is built with:
+- JavaFX for UI
+- Spring WebSocket for real-time communication
+- Jackson for JSON serialization
+- RSA and AES for encryption
+
+## Building and Running
+
+### Prerequisites
+
+- JDK 17 or higher
+- Maven
+
+### Build
 
 ```bash
-mvn clean install
+mvn clean package
 ```
 
-## Running the Application
-
-To run the application, use:
+### Run
 
 ```bash
 mvn javafx:run
 ```
 
-## Features
+Or run the packaged JAR file:
 
-- User registration and login
-- Real-time chat with online users
-- End-to-end encryption (coming soon)
-- Modern and responsive UI
-
-## Configuration
-
-The application configuration can be found in `src/main/resources/application.properties`. Key settings include:
-
-- Server port: 8081
-- WebSocket endpoint: /ws
-- Backend URL: http://localhost:8080
-
-## Dependencies
-
-- JavaFX 21.0.1
-- Spring Boot 3.1.5
-- Spring Security
-- Spring WebSocket
-- Jackson
-- Lombok
-
-## Project Structure
-
-```
-src/main/java/com/e2ee/chat/
-├── ChatApplication.java
-├── config/
-│   ├── SecurityConfig.java
-│   ├── WebSocketConfig.java
-│   ├── WebSocketEventListener.java
-│   ├── WebSocketInterceptor.java
-│   └── WebSocketSecurityConfig.java
-├── controller/
-│   ├── ChatController.java
-│   ├── LoginController.java
-│   ├── SignupController.java
-│   └── WebSocketController.java
-└── service/
-    └── WebSocketService.java
+```bash
+java --add-opens java.base/java.lang=ALL-UNNAMED --add-opens java.base/java.util=ALL-UNNAMED -jar target/e2ee-chat-frontend-1.0.0.jar
 ```
 
-## Contributing
+## Security Features
 
-1. Fork the repository
-2. Create a feature branch
-3. Commit your changes
-4. Push to the branch
-5. Create a Pull Request 
+1. **End-to-End Encryption**: All messages are encrypted on the sender's device and can only be decrypted on the recipient's device.
+
+2. **RSA Key Exchange**: Each user has an RSA key pair. The public key is stored on the server and shared with contacts.
+
+3. **AES Session Keys**: For each chat, a unique AES key is generated and encrypted with the recipient's public key.
+
+4. **No Server Decryption**: The server never has access to the decryption keys, ensuring true end-to-end encryption.
+
+## Development
+
+### Package Structure
+
+- `com.e2ee.chat.frontend`: Main application class
+- `com.e2ee.chat.frontend.controller`: JavaFX controllers
+- `com.e2ee.chat.frontend.model`: Data models
+- `com.e2ee.chat.frontend.service`: Service layer for WebSocket and authentication
+- `com.e2ee.chat.frontend.crypto`: Cryptography utilities
+- `com.e2ee.chat.frontend.utils`: Helper utilities

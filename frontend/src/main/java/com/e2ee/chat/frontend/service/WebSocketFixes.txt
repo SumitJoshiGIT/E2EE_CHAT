@@ -1,0 +1,11 @@
+//
+// This utility method helps extract the current CustomStompSessionHandler code
+// while allowing us to properly fix the WebSocketService class compilation errors
+//
+// 1. Make sure to add the Chat class import
+// 2. Fix the inner classes that are calling super.handleFrame() by directly
+//    calling a helper method instead
+//
+// The main issue was that inner anonymous classes were trying to call super.handleFrame()
+// but that doesn't properly work in Java's nested class structure.
+//

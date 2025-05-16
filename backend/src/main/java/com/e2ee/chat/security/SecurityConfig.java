@@ -1,5 +1,6 @@
 package com.e2ee.chat.security;
 
+import com.e2ee.chat.service.ProfileService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -28,6 +29,7 @@ public class SecurityConfig {
 
     private final JwtTokenProvider tokenProvider;
     private final UserDetailsService userDetailsService;
+    private final ProfileService profileService;
 
     @Bean
     public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
@@ -38,7 +40,7 @@ public class SecurityConfig {
             .authorizeHttpRequests(auth -> auth
             .anyRequest().permitAll() // Allow all requests without authentication
             )
-            .addFilterBefore(new JwtAuthenticationFilter(tokenProvider, userDetailsService),
+            .addFilterBefore(new JwtAuthenticationFilter(tokenProvider, (CustomUserDetailsService) userDetailsService, profileService),
                 UsernamePasswordAuthenticationFilter.class);
 
         return http.build();

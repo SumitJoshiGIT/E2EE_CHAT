@@ -2,10 +2,12 @@ package com.e2ee.chat.security;
 
 import io.jsonwebtoken.*;
 import io.jsonwebtoken.security.Keys;
+import io.jsonwebtoken.security.SignatureException; // Update to use the correct exception
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.core.Authentication;
-import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.stereotype.Component;
+import com.e2ee.chat.model.User; // Import the User class
+import org.bson.types.ObjectId;
 
 import javax.crypto.SecretKey;
 import java.util.Date;
@@ -22,26 +24,29 @@ public class JwtTokenProvider {
     }
 
     public String generateToken(Authentication authentication) {
-        UserDetails userDetails = (UserDetails) authentication.getPrincipal();
+        User user = (User) authentication.getPrincipal(); // Cast to User to access the profile
+        if (user.getProfile() == null) {
+            throw new IllegalStateException("User profile is not initialized for user: " + user.getUsername());
+        }
         Date now = new Date();
         Date expiryDate = new Date(now.getTime() + jwtExpirationInMs);
 
         return Jwts.builder()
-                .setSubject(userDetails.getUsername())
+                .setSubject(user.getProfile().getId().toHexString()) // Use ObjectId as hex string
                 .setIssuedAt(new Date())
                 .setExpiration(expiryDate)
                 .signWith(key)
                 .compact();
     }
 
-    public String getUsernameFromJWT(String token) {
+    public String getPidFromJWT(String token) {
         Claims claims = Jwts.parserBuilder()
                 .setSigningKey(key)
                 .build()
                 .parseClaimsJws(token)
                 .getBody();
 
-        return claims.getSubject();
+        return claims.getSubject(); // This will be the ObjectId hex string
     }
 
     public boolean validateToken(String authToken) {
@@ -68,4 +73,4 @@ public class JwtTokenProvider {
             return false;
         }
     }
-} 
+}

@@ -63,10 +63,10 @@ public class AuthController {
     @PostMapping("/register")
     public ResponseEntity<AuthResponse> register(@RequestBody AuthRequest registerRequest) {
         log.debug("Attempting registration for user: {}", registerRequest.getUsername());
-        
+
         User user = userService.createUser(registerRequest);
-        UserProfile profile = profileService.createProfile(user);
-        
+        UserProfile profile = profileService.createProfile(user); // Ensure profile is created
+
         Authentication authentication = authenticationManager.authenticate(
             new UsernamePasswordAuthenticationToken(
                 registerRequest.getUsername(),
@@ -76,8 +76,8 @@ public class AuthController {
 
         SecurityContextHolder.getContext().setAuthentication(authentication);
         String jwt = tokenProvider.generateToken(authentication);
-        
+
         log.debug("Registration successful for user: {}", registerRequest.getUsername());
         return ResponseEntity.ok(new AuthResponse(jwt, user.getUsername(), profile.getDisplayName()));
     }
-} 
+}
