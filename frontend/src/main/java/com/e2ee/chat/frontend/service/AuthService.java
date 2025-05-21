@@ -100,8 +100,22 @@ public class AuthService {
         }
     }
     
+    /**
+     * Get the current user's profile
+     * @return UserProfile object for the current user
+     */
+    public UserProfile getUserProfile() {
+        if (currentUsername == null) {
+            throw new IllegalStateException("No user is currently logged in");
+        }
+        return getUserProfile(currentUsername);
+    }
+    
     public UserProfile getUserProfile(String username) {
         try {
+            System.out.println("[AuthService] Retrieving profile for username: " + username);
+            System.out.println("[AuthService] Using auth token: " + (authToken != null ? authToken.substring(0, 10) + "..." : "null"));
+            
             HttpRequest request = HttpRequest.newBuilder()
                 .uri(URI.create(PROFILE_URL + "/" + username))
                 .header("Authorization", "Bearer " + authToken)
@@ -110,7 +124,10 @@ public class AuthService {
                 
             HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
             
+            System.out.println("[AuthService] Profile response status: " + response.statusCode());
+            
             if (response.statusCode() >= 200 && response.statusCode() < 300) {
+                System.out.println("[AuthService] Profile response body: " + response.body());
                 JsonNode root = objectMapper.readTree(response.body());
                 UserProfile profile = new UserProfile();
                 profile.setUsername(root.get("username").asText());
@@ -120,10 +137,14 @@ public class AuthService {
                 profile.setStatus(root.has("status") ? root.get("status").asText() : "");
                 profile.setPublicKey(root.has("publicKey") ? root.get("publicKey").asText() : "");
                 profile.setEmail(root.has("email") ? root.get("email").asText() : "");
+                System.out.println("[AuthService] Successfully parsed profile for: " + profile.getUsername());
                 return profile;
+            } else {
+                System.err.println("[AuthService] Error retrieving profile. Status code: " + response.statusCode() + ", Response: " + response.body());
             }
             return null;
         } catch (Exception e) {
+            System.err.println("[AuthService] Exception retrieving profile: " + e.getMessage());
             e.printStackTrace();
             return null;
         }
@@ -148,6 +169,47 @@ public class AuthService {
             httpClient.send(request, HttpResponse.BodyHandlers.ofString());
         } catch (Exception e) {
             e.printStackTrace();
+        }
+    }
+    
+    /**
+     * Update the current user's profile
+     * @param updatedProfile The updated profile information
+     * @param onSuccess Callback to handle successful response
+     * @param onError Callback to handle errors
+     */
+    public void updateProfile(UserProfile updatedProfile, java.util.function.Consumer<UserProfile> onSuccess, 
+                             java.util.function.Consumer<String> onError) {
+        try {
+            String jsonData = objectMapper.writeValueAsString(updatedProfile);
+            
+            HttpRequest request = HttpRequest.newBuilder()
+                .uri(URI.create(PROFILE_URL))
+                .header("Content-Type", "application/json")
+                .header("Authorization", "Bearer " + authToken)
+                .PUT(HttpRequest.BodyPublishers.ofString(jsonData))
+                .build();
+                
+            httpClient.sendAsync(request, HttpResponse.BodyHandlers.ofString())
+                .thenApply(response -> {
+                    if (response.statusCode() >= 200 && response.statusCode() < 300) {
+                        try {
+                            UserProfile profile = objectMapper.readValue(response.body(), UserProfile.class);
+                            return profile;
+                        } catch (Exception e) {
+                            throw new RuntimeException("Failed to parse profile response: " + e.getMessage());
+                        }
+                    } else {
+                        throw new RuntimeException("Failed to update profile: " + response.statusCode() + " - " + response.body());
+                    }
+                })
+                .thenAccept(onSuccess)
+                .exceptionally(e -> {
+                    onError.accept(e.getMessage());
+                    return null;
+                });
+        } catch (Exception e) {
+            onError.accept("Error preparing profile update: " + e.getMessage());
         }
     }
     
@@ -289,5 +351,79 @@ public class AuthService {
         } catch (Exception e) {
             throw new RuntimeException("Failed to extract user ID from auth token", e);
         }
+    }
+    
+    /**
+     * Check authentication status and verify token
+     * This is a debug method to help identify auth issues
+     * @return String describing the current auth state
+     */
+    public String checkAuthStatus() {
+        StringBuilder status = new StringBuilder();
+        status.append("Auth Status:\n");
+        
+        // Check if username is set
+        status.append("- Username: ");
+        if (currentUsername != null && !currentUsername.isEmpty()) {
+            status.append(currentUsername).append(" (OK)\n");
+        } else {
+            status.append("NOT SET (Error)\n");
+        }
+        
+        // Check if token is set
+        status.append("- Token: ");
+        if (authToken != null && !authToken.isEmpty()) {
+            status.append(authToken.substring(0, Math.min(10, authToken.length()))).append("... ");
+            
+            // Check token expiration if it's a JWT token
+            try {
+                String[] parts = authToken.split("\\.");
+                if (parts.length >= 2) {
+                    String payload = new String(Base64.getUrlDecoder().decode(parts[1]), StandardCharsets.UTF_8);
+                    JsonNode payloadJson = objectMapper.readTree(payload);
+                    
+                    if (payloadJson.has("exp")) {
+                        long expTime = payloadJson.get("exp").asLong() * 1000; // Convert to milliseconds
+                        long currentTime = System.currentTimeMillis();
+                        
+                        if (expTime > currentTime) {
+                            status.append("Valid (expires in ").append((expTime - currentTime) / 1000 / 60).append(" minutes)\n");
+                        } else {
+                            status.append("EXPIRED (").append((currentTime - expTime) / 1000 / 60).append(" minutes ago)\n");
+                        }
+                    } else {
+                        status.append("(No expiration found in token)\n");
+                    }
+                } else {
+                    status.append("(Not a valid JWT format)\n");
+                }
+            } catch (Exception e) {
+                status.append("(Error parsing token: ").append(e.getMessage()).append(")\n");
+            }
+        } else {
+            status.append("NOT SET (Error)\n");
+        }
+        
+        // Check if we can connect to the API
+        status.append("- API Connection: ");
+        try {
+            HttpRequest request = HttpRequest.newBuilder()
+                .uri(URI.create(API_BASE_URL + "/health"))
+                .GET()
+                .timeout(Duration.ofSeconds(5))
+                .build();
+                
+            HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+            
+            if (response.statusCode() >= 200 && response.statusCode() < 300) {
+                status.append("OK (Status ").append(response.statusCode()).append(")\n");
+            } else {
+                status.append("ERROR (Status ").append(response.statusCode()).append(")\n");
+            }
+        } catch (Exception e) {
+            status.append("ERROR (").append(e.getMessage()).append(")\n");
+        }
+        
+        return status.toString();
     }
 }

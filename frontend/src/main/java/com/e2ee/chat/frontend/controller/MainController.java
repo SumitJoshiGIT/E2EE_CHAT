@@ -12,7 +12,9 @@ import javafx.collections.FXCollections;
 import javafx.collections.ObservableList;
 import javafx.event.ActionEvent;
 import javafx.fxml.FXML;
+import javafx.fxml.FXMLLoader;
 import javafx.fxml.Initializable;
+import javafx.scene.Parent;
 import javafx.scene.control.*;
 import javafx.scene.input.KeyCode;
 import javafx.scene.input.KeyEvent;
@@ -30,6 +32,9 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.ResourceBundle;
+import javafx.scene.Scene;
+import javafx.stage.Modality;
+import javafx.stage.Stage;
 
 public class MainController implements Initializable {
     
@@ -218,6 +223,74 @@ public class MainController implements Initializable {
         E2EEChatFrontendApplication.showLoginScreen();
     }
     
+    @FXML
+    private void handleEditProfileButton(ActionEvent event) {
+        try {
+            // Debug auth status first
+            System.out.println("DEBUG AUTH STATUS BEFORE OPENING PROFILE EDITOR:");
+            System.out.println(authService.checkAuthStatus());
+            
+            FXMLLoader loader = new FXMLLoader(getClass().getResource("/com/e2ee/chat/frontend/profile_editor.fxml"));
+            Parent root = loader.load();
+            
+            // Get the controller
+            ProfileEditorController controller = loader.getController();
+            
+            // Create dialog stage
+            Stage dialogStage = new Stage();
+            dialogStage.setTitle("Edit Profile");
+            dialogStage.initModality(Modality.WINDOW_MODAL);
+            dialogStage.initOwner(((javafx.scene.Node) event.getSource()).getScene().getWindow());
+            Scene scene = new Scene(root);
+            dialogStage.setScene(scene);
+            
+            // Get the current user profile
+            UserProfile profile = null;
+            try {
+                profile = authService.getUserProfile();
+                if (profile == null) {
+                    System.err.println("Warning: getUserProfile() returned null. Creating fallback profile.");
+                    // Create a default profile as fallback
+                    profile = new UserProfile();
+                    profile.setUsername(authService.getCurrentUsername());
+                    profile.setDisplayName(authService.getCurrentUsername());
+                    profile.setStatus("Online");
+                }
+            } catch (Exception e) {
+                System.err.println("Error retrieving user profile: " + e.getMessage());
+                e.printStackTrace();
+                // Create a default profile as fallback
+                profile = new UserProfile();
+                profile.setUsername(authService.getCurrentUsername());
+                profile.setDisplayName(authService.getCurrentUsername());
+                profile.setStatus("Online");
+            }
+            
+            // Set up the controller
+            controller.setup(authService, profile, dialogStage, () -> {
+                // Callback to run after profile is updated
+                statusLabel.setText("Profile updated successfully!");
+                
+                // Clear message after a delay
+                new Thread(() -> {
+                    try {
+                        Thread.sleep(3000);
+                        Platform.runLater(() -> statusLabel.setText(""));
+                    } catch (InterruptedException e) {
+                        Thread.currentThread().interrupt();
+                    }
+                }).start();
+            });
+            
+            // Show the dialog and wait for it to close
+            dialogStage.showAndWait();
+            
+        } catch (Exception e) {
+            e.printStackTrace();
+            statusLabel.setText("Error opening profile editor: " + e.getMessage());
+        }
+    }
+    
     private void handleChatMessage(ChatMessage message) {
         System.out.println("handleChatMessage triggered for chatId: " + message.getChatId());
         System.out.println("Message content: " + message.getContent());
@@ -387,7 +460,11 @@ public class MainController implements Initializable {
                     }
                 }
             }
-            // If changes were made, the list view will be refreshed by the caller (e.g., updateChatList or selectChat)
+            // If changes were made, refresh the chat list view
+            if (changed) {
+                Platform.runLater(() -> chatListView.refresh());
+            }
+            // The list view will be refreshed by the caller (e.g., updateChatList or selectChat)
             return true;
         }
         System.out.println("[FETCH_PROFILE] Failed to fetch profile for ID: " + profileId + ". UserProfile is null from authService.");

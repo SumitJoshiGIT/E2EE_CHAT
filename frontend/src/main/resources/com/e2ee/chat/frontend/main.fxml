@@ -18,6 +18,8 @@
                </font>
             </Label>
             <Region HBox.hgrow="ALWAYS" />
+            <Button mnemonicParsing="false" onAction="#handleEditProfileButton" text="Edit Profile" />
+            <Separator orientation="VERTICAL" prefHeight="20.0" />
             <Button mnemonicParsing="false" onAction="#handleLogoutButton" text="Logout" />
          </children>
       </HBox>
