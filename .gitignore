@@ -4,6 +4,16 @@ target/
 !**/src/main/**/target/
 !**/src/test/**/target/
 node_modules
+
+### Docusaurus ###
+docs-site/.docusaurus
+docs-site/build
+docs-site/.env.local
+docs-site/.env.development.local
+docs-site/.env.test.local
+docs-site/.env.production.local
+docs-site/node_modules
+
 ### STS ###
 .apt_generated
 .classpath
