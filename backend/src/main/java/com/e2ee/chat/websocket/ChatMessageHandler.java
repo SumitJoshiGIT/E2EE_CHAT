@@ -448,6 +448,47 @@ public class ChatMessageHandler {
         }
     }
 
+    @MessageMapping("/chat.createGroup")
+    public void createGroupChat(@Payload Map<String, Object> payload) {
+        String ownerId = (String) payload.get("ownerId");
+        String groupName = (String) payload.get("groupName");
+        @SuppressWarnings("unchecked")
+        List<String> participants = (List<String>) payload.get("participants");
+        
+        log.info("Creating group chat '{}' with owner {} and participants: {}", groupName, ownerId, participants);
+        
+        Chat chat = chatService.createGroupChat(ownerId, groupName, participants);
+        
+        log.info("Group chat created with ID: {} and participants: {}", chat.getChatId(), chat.getParticipants());
+        
+        Map<String, Object> response = new HashMap<>();
+        response.put("type", "GROUP_CHAT_CREATED");
+        response.put("chatId", chat.getChatId());
+        response.put("participants", chat.getParticipants());
+        response.put("ownerId", ownerId);
+        response.put("groupName", groupName);
+        response.put("chatType", "group");
+        
+        // Send notification to ALL participants, regardless of online status
+        // The messaging system will handle delivery appropriately
+        for (String participantId : chat.getParticipants()) {
+            log.info("Sending GROUP_CHAT_CREATED notification to participant: {} (online: {})", 
+                participantId, onlineUsers.contains(participantId));
+            try {
+                messagingTemplate.convertAndSendToUser(
+                    participantId,
+                    "/queue/messages",
+                    response
+                );
+                log.info("Successfully sent notification to participant: {}", participantId);
+            } catch (Exception e) {
+                log.error("Failed to send notification to participant {}: {}", participantId, e.getMessage());
+            }
+        }
+        
+        log.info("Group chat creation notifications sent to all {} participants", chat.getParticipants().size());
+    }
+
     // @MessageMapping("/chat.sendMessage") endpoint removed as it was redundant with "/chat.send"
     // The frontend only uses the "/chat.send" endpoint
 
@@ -574,7 +615,18 @@ public class ChatMessageHandler {
      * @param profileId The profile ID to send chat list to
      */
     private void sendChatListToUser(String profileId) {
+        log.info("=== SENDING CHAT LIST TO USER {} ===", profileId);
+        
         List<Chat> userChats = chatService.findChatsByParticipant(profileId);
+        log.info("Found {} chats for user {}", userChats.size(), profileId);
+        
+        // Log details of each chat found
+        for (int i = 0; i < userChats.size(); i++) {
+            Chat chat = userChats.get(i);
+            log.info("Chat {}: ID={}, Type={}, GroupName={}, Participants={}", 
+                i + 1, chat.getChatId(), chat.getChatType(), chat.getGroupName(), chat.getParticipants());
+        }
+        
         if (!userChats.isEmpty()) {
             Map<String, Object> response = new HashMap<>();
             response.put("type", "CHAT_LIST");
@@ -595,7 +647,17 @@ public class ChatMessageHandler {
             log.info("Sent chat list with {} chats to user {} on both message queues", userChats.size(), profileId);
         } else {
             log.info("No chats found for user {}", profileId);
+            
+            // Send empty chat list response
+            Map<String, Object> response = new HashMap<>();
+            response.put("type", "CHAT_LIST");
+            response.put("chats", new ArrayList<>());
+            
+            messagingTemplate.convertAndSendToUser(profileId, "/queue/messages", response);
+            messagingTemplate.convertAndSendToUser(profileId, "/queue/chat.list", response);
         }
+        
+        log.info("=== CHAT LIST SEND COMPLETE FOR USER {} ===", profileId);
     }
     
     /**

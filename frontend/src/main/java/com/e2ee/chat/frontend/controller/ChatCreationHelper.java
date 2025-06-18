@@ -24,6 +24,12 @@ public class ChatCreationHelper {
     public static void startChatWithUser(WebSocketService webSocketService, UserProfile user, 
                                          String currentUserId, Label statusLabel, ListView<?> chatListView) {
         try {
+            // Validate user profile ID
+            if (user.getProfileId() == null || user.getProfileId().isEmpty()) {
+                statusLabel.setText("Error: User profile ID is missing");
+                return;
+            }
+            
             // Prepare chat creation payload
             Map<String, Object> payload = new HashMap<>();
             payload.put("targetProfileId", user.getProfileId()); // Use profile ID instead of username

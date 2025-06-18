@@ -17,7 +17,7 @@ import java.util.HashMap;
 import java.util.Map;
 
 public class AuthService {
-    private static final String API_BASE_URL = "http://localhost:8080/api";
+    public static final String API_BASE_URL = "http://localhost:8080/api";
     private static final String LOGIN_URL = API_BASE_URL + "/auth/login";
     private static final String REGISTER_URL = API_BASE_URL + "/auth/register";
     private static final String PROFILE_URL = API_BASE_URL + "/profile";

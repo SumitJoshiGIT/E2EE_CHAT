@@ -10,6 +10,7 @@ import com.e2ee.chat.service.ChatService;
 import com.e2ee.chat.model.Chat;
 import com.e2ee.chat.model.Message;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -23,6 +24,7 @@ import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
+@Slf4j
 public class ChatServiceImpl implements ChatService {
 
     private final ChatRepository chatRepository;
@@ -104,6 +106,7 @@ public class ChatServiceImpl implements ChatService {
         chat.setTargetUserId(targetUserId);
         chat.setCreatedAt(LocalDateTime.now());
         chat.setUpdatedAt(LocalDateTime.now());
+        chat.setChatType("private");
 
         // Save the chat
         Chat savedChat = chatRepository.save(chat);
@@ -204,8 +207,24 @@ public class ChatServiceImpl implements ChatService {
     
     @Override
     public List<Chat> findChatsByParticipant(String userId) {
+        log.info("=== FINDING CHATS FOR PARTICIPANT {} ===", userId);
+        
         // Search for chats where user is a participant
-        return chatRepository.findByParticipantsContaining(userId);
+        List<Chat> chats = chatRepository.findByParticipantsContaining(userId);
+        
+        log.info("Found {} chats for participant {}", chats.size(), userId);
+        
+        // Log details of each chat found
+        for (int i = 0; i < chats.size(); i++) {
+            Chat chat = chats.get(i);
+            log.info("Chat {}: ID={}, Type={}, GroupName={}, Participants={}, Owner={}", 
+                i + 1, chat.getChatId(), chat.getChatType(), chat.getGroupName(), 
+                chat.getParticipants(), chat.getOwnerId());
+        }
+        
+        log.info("=== CHAT SEARCH COMPLETE FOR PARTICIPANT {} ===", userId);
+        
+        return chats;
     }
     
     @Override
@@ -255,5 +274,39 @@ public class ChatServiceImpl implements ChatService {
         } catch (Exception e) {
             throw new RuntimeException("Failed to mark messages as read", e);
         }
+    }
+
+    @Override
+    @Transactional
+    public Chat createGroupChat(String ownerId, String groupName, List<String> participantUsernames) {
+        log.info("Creating group chat '{}' with owner {} and participants: {}", groupName, ownerId, participantUsernames);
+        
+        Chat chat = new Chat();
+        List<String> participants = new ArrayList<>(participantUsernames);
+        if (!participants.contains(ownerId)) {
+            participants.add(ownerId);
+            log.info("Added owner {} to participants list", ownerId);
+        }
+        
+        chat.setParticipants(participants);
+        chat.setOwnerId(ownerId);
+        chat.setCreatedAt(LocalDateTime.now());
+        chat.setUpdatedAt(LocalDateTime.now());
+        chat.setLastMessagePreview("Group created: " + groupName);
+        chat.setTargetUserId(null);
+        chat.setTargetPublicKey(null);
+        chat.setGroupName(groupName);
+        chat.setChatType("group");
+        
+        Chat savedChat = chatRepository.save(chat);
+        log.info("Group chat saved with ID: {} and final participants: {}", savedChat.getChatId(), savedChat.getParticipants());
+        
+        // Verify that participants can be found in database
+        for (String participantId : savedChat.getParticipants()) {
+            List<Chat> participantChats = chatRepository.findByParticipantsContaining(participantId);
+            log.info("Participant {} now has {} chats (including newly created)", participantId, participantChats.size());
+        }
+        
+        return savedChat;
     }
 }

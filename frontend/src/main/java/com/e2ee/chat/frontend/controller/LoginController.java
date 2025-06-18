@@ -15,21 +15,21 @@ import java.net.URL;
 import java.util.ResourceBundle;
 
 public class LoginController implements Initializable {
-    
+
     @FXML
     private TextField usernameField;
-    
+
     @FXML
     private PasswordField passwordField;
-    
+
     @FXML
     private Button loginButton;
-    
+
     @FXML
     private Hyperlink registerLink;
-    
+
     private AuthService authService;
-    
+
     @Override
     public void initialize(URL location, ResourceBundle resources) {
         authService = E2EEChatFrontendApplication.getAuthService();
@@ -45,20 +45,20 @@ public class LoginController implements Initializable {
         // Initialize button state
         checkFields();
     }
-    
+
     @FXML
     public void handleLoginButton(ActionEvent event) {
         String username = usernameField.getText().trim();
         String password = passwordField.getText();
-        
+
         // Disable the button during login attempt
         loginButton.setDisable(true);
         loginButton.setText("Logging in...");
-        
+
         // Run login in a separate thread to avoid freezing the UI
         new Thread(() -> {
             boolean success = authService.login(username, password);
-            
+
             // Update UI on JavaFX thread
             javafx.application.Platform.runLater(() -> {
                 if (success) {
@@ -69,7 +69,7 @@ public class LoginController implements Initializable {
                     alert.setHeaderText("Invalid username or password");
                     alert.setContentText("Please check your credentials and try again.");
                     alert.showAndWait();
-                    
+
                     // Reset the button
                     loginButton.setDisable(false);
                     loginButton.setText("Login");
@@ -77,17 +77,17 @@ public class LoginController implements Initializable {
             });
         }).start();
     }
-    
+
     @FXML
     public void handleRegisterLink(ActionEvent event) {
         // Show registration screen
         E2EEChatFrontendApplication.showRegistrationScreen();
     }
-    
+
     private void checkFields() {
-        boolean fieldsValid = !usernameField.getText().trim().isEmpty() && 
-                            !passwordField.getText().isEmpty();
-        
+        boolean fieldsValid = !usernameField.getText().trim().isEmpty() &&
+                !passwordField.getText().isEmpty();
+
         loginButton.setDisable(!fieldsValid);
     }
 }

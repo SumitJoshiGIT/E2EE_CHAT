@@ -21,4 +21,6 @@ public class Chat {
     private String targetUserId;
     private String targetPublicKey;
     private String ownerId;
+    private String groupName; // For group chats
+    private String chatType; // "private" or "group"
 }

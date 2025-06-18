@@ -33,4 +33,7 @@ public interface ChatService {
     
     // Method to mark messages as read by a user
     void markMessagesAsRead(String chatId, String userId, List<String> messageIds);
+    
+    // Method to create a group chat
+    Chat createGroupChat(String ownerId, String groupName, List<String> participantUsernames);
 }

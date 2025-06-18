@@ -9,8 +9,7 @@ import java.util.List;
 public interface ChatRepository extends MongoRepository<Chat, String> {
     List<Chat> findByOwnerId(String ownerId);
     
-    // Find chats where a user is a participant
-    @Query("{ 'participants': { $in: [?0] } }")
+    // Find chats where a user is a participant using Spring Data method name
     List<Chat> findByParticipantsContaining(String userId);
     
     // Find chat by both participants

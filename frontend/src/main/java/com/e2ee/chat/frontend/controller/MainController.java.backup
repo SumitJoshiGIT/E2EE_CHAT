@@ -59,6 +59,8 @@ public class MainController implements Initializable {
     @FXML
     private Label currentChatLabel;
     
+    @FXML
+    private Label statusLabel;
     
     @FXML
     private Button newGroupButton;
@@ -74,9 +76,6 @@ public class MainController implements Initializable {
     
     @FXML
     private Button chatOptionsButton;
-    
-    @FXML
-    private Label statusLabel;
     
     private AuthService authService;
     private WebSocketService webSocketService;
@@ -462,12 +461,10 @@ public class MainController implements Initializable {
         System.out.println("Total chats in list: " + chats.size());
 
         Platform.runLater(() -> {
-            // Check if this is our own message being echoed back (only applies to sender)
+            // First check if this is a duplicate message (same clientTempId)
             String clientTempId = message.getClientTempId();
-            boolean isOwnMessage = message.getSenderId().equals(authService.getUserId());
-            
-            if (isOwnMessage && clientTempId != null && !clientTempId.isEmpty() && pendingMessages.containsKey(clientTempId)) {
-                System.out.println("Found our own message echo with clientTempId: " + clientTempId);
+            if (clientTempId != null && !clientTempId.isEmpty() && pendingMessages.containsKey(clientTempId)) {
+                System.out.println("Found duplicate message with clientTempId: " + clientTempId);
                 System.out.println("Pending messages map contains: " + pendingMessages.keySet());
                 
                 // This is our own message being echoed back, no need to add it again
@@ -479,18 +476,11 @@ public class MainController implements Initializable {
                 pendingMessages.remove(clientTempId);
                 System.out.println("Removed message from pending messages. Remaining: " + pendingMessages.size());
                 
-                // Debug: Check if the message is in the current UI
-                System.out.println("Current chat messages count: " + (currentChat != null && currentChat.getMessages() != null ? currentChat.getMessages().size() : 0));
-                System.out.println("UI messages count: " + messages.size());
-                System.out.println("Message should already be visible in UI since it was added when sent");
-                
-                // Skip further processing since this message is already in the UI
+                // Skip further processing
                 return;
-            } else if (isOwnMessage && clientTempId != null && !clientTempId.isEmpty()) {
-                System.out.println("Received our own message with clientTempId: " + clientTempId + " but not found in pending messages");
+            } else if (clientTempId != null && !clientTempId.isEmpty()) {
+                System.out.println("Received message with clientTempId: " + clientTempId + " but not found in pending messages");
                 System.out.println("Pending messages keys: " + pendingMessages.keySet());
-            } else if (!isOwnMessage) {
-                System.out.println("Received message from another user (sender: " + message.getSenderId() + ")");
             } else {
                 System.out.println("Received message with no clientTempId");
             }
@@ -572,100 +562,36 @@ public class MainController implements Initializable {
                 
                 // Add to the chat's message list if not a duplicate
                 boolean isDuplicate = false;
-                String duplicateReason = "";
-                
-                System.out.println("DUPLICATE CHECK: Checking message from " + message.getSenderId() + 
-                    " with clientTempId: " + message.getClientTempId());
-                System.out.println("DUPLICATE CHECK: Chat has " + targetChat.getMessages().size() + " existing messages");
-                
-                for (int i = 0; i < targetChat.getMessages().size(); i++) {
-                    ChatMessage existingMsg = targetChat.getMessages().get(i);
-                    System.out.println("DUPLICATE CHECK: Message " + i + " - Sender: " + existingMsg.getSenderId() + 
-                        ", ClientTempId: " + existingMsg.getClientTempId() + 
-                        ", Content: " + existingMsg.getContent() + 
-                        ", MessageId: " + existingMsg.getId());
-                    
-                    // Check for exact ID match first (most reliable)
-                    if (message.getId() != null && existingMsg.getId() != null && 
-                        message.getId().equals(existingMsg.getId())) {
+                for (ChatMessage existingMsg : targetChat.getMessages()) {
+                    if ((message.getId() != null && message.getId().equals(existingMsg.getId())) ||
+                        (message.getClientTempId() != null && message.getClientTempId().equals(existingMsg.getClientTempId())) ||
+                        // Also check content+timestamp+sender as a fallback
+                        (message.getContent() != null && message.getTimestamp() != null && existingMsg.getContent() != null && 
+                         message.getContent().equals(existingMsg.getContent()) && 
+                         message.getTimestamp().equals(existingMsg.getTimestamp()) &&
+                         message.getSenderId().equals(existingMsg.getSenderId()))) {
                         isDuplicate = true;
-                        duplicateReason = "same message ID: " + message.getId();
-                        System.out.println("DUPLICATE CHECK: Found duplicate by message ID");
-                        break;
-                    }
-                    // For messages from current user, check clientTempId
-                    else if (isOwnMessage && message.getClientTempId() != null && 
-                            message.getClientTempId().equals(existingMsg.getClientTempId())) {
-                        isDuplicate = true;
-                        duplicateReason = "same clientTempId for own message: " + message.getClientTempId();
-                        System.out.println("DUPLICATE CHECK: Found duplicate own message by clientTempId");
                         break;
                     }
                 }
                 
                 if (!isDuplicate) {
                     System.out.println("Adding non-duplicate message to chat " + targetChat.getChatId() + ": " + message.getContent());
-                    System.out.println("Message from: " + message.getSenderId() + " (is own message: " + isOwnMessage + ")");
                     targetChat.addMessage(message);
                     
                     // Update display if this is the current chat
                     if (currentChat != null && currentChat.getChatId().equals(targetChat.getChatId())) {
-                        System.out.println("Message is for current chat. Checking if already in UI...");
-                        boolean alreadyInUI = messages.stream().anyMatch(existingMsg -> {
-                            // Check for exact ID match first
-                            if (message.getId() != null && message.getId().equals(existingMsg.getId())) {
-                                return true;
-                            }
-                            // Only check clientTempId for messages from the same sender
-                            if (message.getClientTempId() != null && 
-                                message.getClientTempId().equals(existingMsg.getClientTempId()) &&
-                                message.getSenderId().equals(existingMsg.getSenderId())) {
-                                return true;
-                            }
-                            // Fallback: check content+timestamp+sender (be more strict about timing)
-                            if (message.getContent() != null && message.getTimestamp() != null && 
-                                existingMsg.getContent() != null && existingMsg.getTimestamp() != null &&
-                                message.getContent().equals(existingMsg.getContent()) && 
-                                message.getSenderId().equals(existingMsg.getSenderId()) &&
-                                java.time.Duration.between(existingMsg.getTimestamp(), message.getTimestamp()).abs().toMillis() < 1000) {
-                                return true;
-                            }
-                            return false;
-                        });
-                        
-                        if (!alreadyInUI) {
-                            System.out.println("Adding message to UI for current chat: " + message.getContent());
-                            System.out.println("Message from: " + message.getSenderId() + " (is own message: " + isOwnMessage + ")");
-                            System.out.println("UI messages before add: " + messages.size());
+                        if (!messages.contains(message)) {
                             messages.add(message);
-                            System.out.println("UI messages after add: " + messages.size());
-                            
-                            // Force ListView to update and scroll
-                            messageListView.refresh();
-                            int lastIndex = messages.size() - 1;
-                            messageListView.scrollTo(lastIndex);
-                            
-                            // Additional debugging
-                            System.out.println("ListView item count: " + messageListView.getItems().size());
-                            System.out.println("Scrolled to index: " + lastIndex);
-                            System.out.println("Message added to UI successfully!");
-                        } else {
-                            System.out.println("Message already exists in UI, skipping");
+                            messageListView.scrollTo(messages.size() - 1);
                         }
                     } else {
                         // This message is for a different chat than the one currently displayed
                         // We could add notification logic here in the future
                         System.out.println("Message received for a non-current chat: " + targetChat.getChatId());
-                        if (currentChat != null) {
-                            System.out.println("Current chat ID: " + currentChat.getChatId());
-                        } else {
-                            System.out.println("No current chat selected");
-                        }
                     }
                 } else {
                     System.out.println("Skipping duplicate message: " + message.getContent());
-                    System.out.println("Duplicate reason: " + duplicateReason);
-                    System.out.println("Message from: " + message.getSenderId() + " (is own message: " + isOwnMessage + ")");
                 }
             }
             
@@ -858,8 +784,8 @@ public class MainController implements Initializable {
             }
             
             for (Chat chat : chats) {
-                boolean isOnline = chat.getTargetUserId() != null && onlineUsers.stream()
-                    .anyMatch(u -> u.getProfileId() != null && u.getProfileId().equals(chat.getTargetUserId()));
+                boolean isOnline = onlineUsers.stream()
+                    .anyMatch(u -> u.getProfileId().equals(chat.getTargetUserId()));
                 
                 // Store online status in the chat object
                 chat.setTargetUserOnline(isOnline);
@@ -992,10 +918,7 @@ public class MainController implements Initializable {
                 
         // Add to the UI messages list
         messages.add(localMessage);
-        System.out.println("Added message to UI messages list. Total UI messages: " + messages.size());
         messageListView.scrollTo(messages.size() - 1);
-        messageListView.refresh(); // Ensure the ListView updates
-        System.out.println("Scrolled message list to position: " + (messages.size() - 1));
 
         // For group chats, we need to refresh the chat list after sending a message
         // but don't do it immediately to avoid losing our message
@@ -1112,26 +1035,19 @@ public class MainController implements Initializable {
     private void startChatWithUser(UserProfile user) {
         System.out.println("Starting chat with user: " + user.getUsername());
         
-        // Validate user profile ID
-        if (user.getProfileId() == null || user.getProfileId().isEmpty()) {
-            statusLabel.setText("Error: User profile ID is missing");
-            return;
-        }
-        
         // Store the user profile for future reference
         userProfiles.put(user.getProfileId(), user);
         
         // Check if chat already exists
         Chat existingChat = chats.stream()
-            .filter(c -> c.getTargetUserId() != null && c.getTargetUserId().equals(user.getProfileId()))
+            .filter(c -> c.getTargetUserId().equals(user.getProfileId()))
             .findFirst()
             .orElse(null);
         
         if (existingChat != null) {
             // Select existing chat
             chatListView.getSelectionModel().select(existingChat);
-            String userName = user.getDisplayName() != null ? user.getDisplayName() : user.getUsername();
-            statusLabel.setText("Chat with " + userName + " already exists");
+            statusLabel.setText("Chat with " + user.getDisplayName() + " already exists");
         } else {
             System.out.println("Debug: Selected user's userId = " + user.getProfileId());
             // Use the helper class with improved WebSocket message handling
@@ -1193,6 +1109,7 @@ public class MainController implements Initializable {
         MenuItem item = new MenuItem(icon + " " + text);
         item.setStyle("-fx-padding: 5 10 5 10; -fx-font-size: 13px;");
         return item;
+        contextMenu.show(chatOptionsButton, javafx.geometry.Side.BOTTOM, 0, 0);
     }
     
     private void showGroupParticipants(Chat chat) {
@@ -1265,16 +1182,16 @@ public class MainController implements Initializable {
         rowContainer.setAlignment(Pos.CENTER_LEFT);
         rowContainer.setSpacing(10);
         rowContainer.setPadding(new Insets(8, 10, 8, 10));
-
+        
         // Create avatar circle with initials
         StackPane avatar = new StackPane();
         avatar.setMinSize(35, 35);
         avatar.setPrefSize(35, 35);
         avatar.setMaxSize(35, 35);
-
+        
         // Get initials and set a consistent background color
         String initials = getInitials(displayName);
-
+        
         // Set background color based on name hash
         int hashCode = Math.abs(displayName.hashCode()) % 8;
         String[] colors = {
@@ -1287,31 +1204,80 @@ public class MainController implements Initializable {
             "#F4511E", // Deep Orange
             "#546E7A"  // Blue Grey
         };
-
+        
         avatar.setStyle("-fx-background-color: " + colors[hashCode] + "; -fx-background-radius: 17.5;");
-
+        
         // Set initials label
         Label initialsLabel = new Label(initials);
         initialsLabel.setStyle("-fx-text-fill: white; -fx-font-weight: bold;");
         avatar.getChildren().add(initialsLabel);
-
+        
         // User name container
         VBox userInfo = new VBox();
         userInfo.setSpacing(2);
-
+        
         // User name label
         Label nameLabel = new Label(displayName);
         nameLabel.setStyle("-fx-font-weight: " + (isCurrentUser ? "bold" : "normal") + ";");
-
+        
         // Online status indicator
         Label statusLabel = new Label(isOnline ? "Online" : "Offline");
         statusLabel.setStyle("-fx-text-fill: " + (isOnline ? "#43A047" : "#757575") + "; -fx-font-size: 11px;");
-
+        
         userInfo.getChildren().addAll(nameLabel, statusLabel);
-
+        
         // Add components to row
         rowContainer.getChildren().addAll(avatar, userInfo);
-
+        
+        return rowContainer;
+    }
+        
+        // Create avatar circle with initials
+        StackPane avatar = new StackPane();
+        avatar.setMinSize(35, 35);
+        avatar.setPrefSize(35, 35);
+        avatar.setMaxSize(35, 35);
+        
+        // Get initials and set a consistent background color
+        String initials = getInitials(displayName);
+        
+        // Set background color based on name hash
+        int hashCode = Math.abs(displayName.hashCode()) % 8;
+        String[] colors = {
+            "#1E88E5", // Blue
+            "#43A047", // Green
+            "#E53935", // Red
+            "#FB8C00", // Orange
+            "#8E24AA", // Purple
+            "#00897B", // Teal
+            "#F4511E", // Deep Orange
+            "#546E7A"  // Blue Grey
+        };
+        
+        avatar.setStyle("-fx-background-color: " + colors[hashCode] + "; -fx-background-radius: 17.5;");
+        
+        // Set initials label
+        Label initialsLabel = new Label(initials);
+        initialsLabel.setStyle("-fx-text-fill: white; -fx-font-weight: bold;");
+        avatar.getChildren().add(initialsLabel);
+        
+        // User name container
+        VBox userInfo = new VBox();
+        userInfo.setSpacing(2);
+        
+        // User name label
+        Label nameLabel = new Label(displayName);
+        nameLabel.setStyle("-fx-font-weight: " + (isCurrentUser ? "bold" : "normal") + ";");
+        
+        // Online status indicator
+        Label statusLabel = new Label(isOnline ? "Online" : "Offline");
+        statusLabel.setStyle("-fx-text-fill: " + (isOnline ? "#43A047" : "#757575") + "; -fx-font-size: 11px;");
+        
+        userInfo.getChildren().addAll(nameLabel, statusLabel);
+        
+        // Add components to row
+        rowContainer.getChildren().addAll(avatar, userInfo);
+        
         return rowContainer;
     }
     
@@ -1454,6 +1420,7 @@ public class MainController implements Initializable {
         row.getChildren().addAll(iconLabel, infoContainer);
         
         return row;
+    }
     }
     
     private void handleLeaveGroup(Chat chat) {
@@ -1698,12 +1665,8 @@ public class MainController implements Initializable {
                 previewLabel.setText(item.getLastMessagePreview() != null ? item.getLastMessagePreview() : "");
                 
                 // Set time of last message
-                LocalDateTime lastTimestamp = null;
-                if (item.getMessages() != null && !item.getMessages().isEmpty()) {
-                    ChatMessage lastMsg = item.getMessages().get(item.getMessages().size() - 1);
-                    lastTimestamp = lastMsg.getTimestamp();
-                }
-                timeLabel.setText(lastTimestamp != null ? formatTimestamp(lastTimestamp) : "");
+                timeLabel.setText(item.getLastMessageTimestamp() != null ? 
+                                 formatTimestamp(item.getLastMessageTimestamp()) : "");
                 
                 // Set online status indicator
                 if (isGroupChat) {
@@ -1813,7 +1776,12 @@ public class MainController implements Initializable {
                     messageBox.setStyle(CURRENT_USER_BUBBLE_STYLE);
                     
                     // Add status check mark for sent messages
-                    String statusIcon = "✓"; // Single check for sent (status checking removed since getStatus() doesn't exist)
+                    String statusIcon = "✓"; // Single check for sent
+                    if (item.getStatus() != null && "delivered".equalsIgnoreCase(item.getStatus())) {
+                        statusIcon = "✓✓"; // Double check for delivered
+                    } else if (item.getStatus() != null && "read".equalsIgnoreCase(item.getStatus())) {
+                        statusIcon = "✓✓"; // Blue double check for read (would need different styling)
+                    }
                     
                     HBox statusBox = new HBox(3);
                     statusBox.setAlignment(Pos.BOTTOM_RIGHT);
@@ -1854,6 +1822,29 @@ public class MainController implements Initializable {
                 container.getChildren().clear();
                 container.getChildren().add(messageBox);
                 
+                setGraphic(container);
+            }
+        }
+    }
+                
+                // Format time
+                LocalDateTime timestamp = item.getTimestamp();
+                if (timestamp != null) {
+                    timeLabel.setText(timestamp.format(DateTimeFormatter.ofPattern("HH:mm")));
+                } else {
+                    timeLabel.setText("");
+                }
+                
+                // Style based on message ownership
+                if (item.isOwn()) {
+                    messageLabel.setStyle("-fx-background-color: #dcf8c6; -fx-padding: 10px; -fx-background-radius: 10px 10px 0px 10px;");
+                    container.setAlignment(javafx.geometry.Pos.CENTER_RIGHT);
+                } else {
+                    messageLabel.setStyle("-fx-background-color: #ffffff; -fx-padding: 10px; -fx-background-radius: 10px 10px 10px 0px;");
+                    container.setAlignment(javafx.geometry.Pos.CENTER_LEFT);
+                }
+                
+                messageBox.getChildren().setAll(messageLabel);
                 setGraphic(container);
             }
         }
@@ -1965,9 +1956,9 @@ public class MainController implements Initializable {
                     // For now we're just using initials
                 }
             }
+            
+            // Set online status label
             if (isOnline) {
-                profileInitialsLabel.setText(initials)
-;
                 memberStatusLabel.setText("Online");
                 memberStatusLabel.setStyle("-fx-text-fill: #43A047;"); // Green color for online
             } else {

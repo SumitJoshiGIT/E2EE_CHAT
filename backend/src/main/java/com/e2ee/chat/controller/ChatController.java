@@ -73,4 +73,23 @@ public class ChatController {
         
         return ResponseEntity.notFound().build();
     }
+    
+    @PostMapping("/group")
+    public ResponseEntity<Chat> createGroupChat(
+            @AuthenticationPrincipal UserDetails userDetails,
+            @RequestBody Map<String, Object> payload) {
+        String groupName = (String) payload.get("groupName");
+        Object participantsObj = payload.get("participants");
+        List<String> participants;
+        if (participantsObj instanceof List<?>) {
+            participants = ((List<?>) participantsObj).stream()
+                .filter(String.class::isInstance)
+                .map(String.class::cast)
+                .toList();
+        } else {
+            participants = List.of();
+        }
+        Chat chat = chatService.createGroupChat(userDetails.getUsername(), groupName, participants);
+        return ResponseEntity.ok(chat);
+    }
 }

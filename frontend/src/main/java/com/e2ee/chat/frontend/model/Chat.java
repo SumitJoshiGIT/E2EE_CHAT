@@ -19,6 +19,8 @@ public class Chat {
     private String targetPublicKey;
     private String ownerId;
     private String sharedSecret; // Added for E2EE
+    private String groupName; // For group chats
+    private String chatType; // "private" or "group"
     
     // JavaFX properties for UI binding
     private final StringProperty targetUsername = new SimpleStringProperty();
@@ -147,6 +149,22 @@ public class Chat {
     
     public void setTargetUserOnline(boolean targetUserOnline) {
         this.targetUserOnline.set(targetUserOnline);
+    }
+    
+    public String getGroupName() {
+        return groupName;
+    }
+
+    public void setGroupName(String groupName) {
+        this.groupName = groupName;
+    }
+    
+    public String getChatType() {
+        return chatType;
+    }
+
+    public void setChatType(String chatType) {
+        this.chatType = chatType;
     }
     
     @Override
