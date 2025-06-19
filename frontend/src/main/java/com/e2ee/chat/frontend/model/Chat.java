@@ -26,6 +26,8 @@ public class Chat {
     private final StringProperty targetUsername = new SimpleStringProperty();
     private final BooleanProperty targetUserOnline = new SimpleBooleanProperty(false);
     
+    private List<String> admins = new ArrayList<>(); // Admins for group chat
+    
     public Chat() {
         this.createdAt = LocalDateTime.now();
         this.updatedAt = LocalDateTime.now();
@@ -165,6 +167,27 @@ public class Chat {
 
     public void setChatType(String chatType) {
         this.chatType = chatType;
+    }
+    
+    // Admin management
+    public List<String> getAdmins() {
+        return admins;
+    }
+    public void setAdmins(List<String> admins) {
+        this.admins = admins;
+    }
+    public boolean isAdmin(String userId) {
+        return admins != null && userId != null && admins.contains(userId);
+    }
+    public void addAdmin(String userId) {
+        if (admins == null) admins = new ArrayList<>();
+        if (userId != null && !admins.contains(userId)) admins.add(userId);
+    }
+    public void removeAdmin(String userId) {
+        if (admins != null && userId != null) admins.remove(userId);
+    }
+    public void removeParticipant(String userId) {
+        if (participants != null && userId != null) participants.remove(userId);
     }
     
     @Override

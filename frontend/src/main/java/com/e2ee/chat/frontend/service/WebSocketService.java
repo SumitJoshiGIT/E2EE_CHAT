@@ -34,6 +34,9 @@ public class WebSocketService {
     private static final String SEND_ENDPOINT = "/app/chat.send";
     private static final String KEY_EXCHANGE_ENDPOINT = "/app/chat.keyExchange";
     private static final String CREATE_GROUP_ENDPOINT = "/app/chat.createGroup";
+    private static final String PROMOTE_ADMIN_ENDPOINT = "/app/chat.promoteAdmin";
+    private static final String REMOVE_PARTICIPANT_ENDPOINT = "/app/chat.removeParticipant";
+    private static final String UPDATE_GROUP_NAME_ENDPOINT = "/app/chat.updateGroupName";
 
     private WebSocketStompClient stompClient;
     private StompSession stompSession;
@@ -44,10 +47,10 @@ public class WebSocketService {
 
     private final Map<String, Chat> chats = new HashMap<>();
     private final List<UserProfile> onlineUsers = new ArrayList<>();
-    
+
     // Message deduplication: track processed messages by their unique signature
     private final Map<String, Long> processedMessages = new HashMap<>();
-    private static final long MESSAGE_DEDUP_TIMEOUT = 60000; // 1 minute
+    private static final long MESSAGE_DEDUP_TIMEOUT = 5000; // 5 seconds (reduced from 1 minute)
 
     private Consumer<ChatMessage> messageHandler;
     private Consumer<List<Chat>> chatListHandler;
@@ -578,6 +581,78 @@ public class WebSocketService {
         }
     }
 
+    /**
+     * Promotes a user to admin in a group chat
+     * @param chatId The ID of the group chat
+     * @param userId The ID of the user to promote
+     */
+    public void promoteToAdmin(String chatId, String userId) {
+        if (!isConnected() || chatId == null || userId == null) {
+            return;
+        }
+
+        Map<String, String> payload = new HashMap<>();
+        payload.put("chatId", chatId);
+        payload.put("userId", userId);
+
+        try {
+            String jsonPayload = objectMapper.writeValueAsString(payload);
+            stompSession.send(PROMOTE_ADMIN_ENDPOINT, jsonPayload.getBytes(StandardCharsets.UTF_8));
+            System.out.println("Sent promote admin request for user " + userId + " in chat " + chatId);
+        } catch (Exception e) {
+            System.err.println("Error promoting user to admin: " + e.getMessage());
+            e.printStackTrace();
+        }
+    }
+
+    /**
+     * Removes a participant from a group chat
+     * @param chatId The ID of the group chat
+     * @param userId The ID of the user to remove
+     */
+    public void removeFromGroup(String chatId, String userId) {
+        if (!isConnected() || chatId == null || userId == null) {
+            return;
+        }
+
+        Map<String, String> payload = new HashMap<>();
+        payload.put("chatId", chatId);
+        payload.put("userId", userId);
+
+        try {
+            String jsonPayload = objectMapper.writeValueAsString(payload);
+            stompSession.send(REMOVE_PARTICIPANT_ENDPOINT, jsonPayload.getBytes(StandardCharsets.UTF_8));
+            System.out.println("Sent remove participant request for user " + userId + " from chat " + chatId);
+        } catch (Exception e) {
+            System.err.println("Error removing participant: " + e.getMessage());
+            e.printStackTrace();
+        }
+    }
+
+    /**
+     * Updates the name of a group chat
+     * @param chatId The ID of the group chat
+     * @param newName The new name for the group
+     */
+    public void updateGroupName(String chatId, String newName) {
+        if (!isConnected() || chatId == null || newName == null) {
+            return;
+        }
+
+        Map<String, String> payload = new HashMap<>();
+        payload.put("chatId", chatId);
+        payload.put("newName", newName);
+
+        try {
+            String jsonPayload = objectMapper.writeValueAsString(payload);
+            stompSession.send(UPDATE_GROUP_NAME_ENDPOINT, jsonPayload.getBytes(StandardCharsets.UTF_8));
+            System.out.println("Sent update group name request for chat " + chatId + " to " + newName);
+        } catch (Exception e) {
+            System.err.println("Error updating group name: " + e.getMessage());
+            e.printStackTrace();
+        }
+    }
+
     public void setMessageHandler(Consumer<ChatMessage> handler) {
         this.messageHandler = handler;
     }
@@ -636,6 +711,55 @@ public class WebSocketService {
         // In a more complex app, you might want to maintain a reference to the active
         // handler
         return new CustomStompSessionHandler();
+    }
+
+    public String sendFileMessage(String chatId, String fileUrl, String fileName, long fileSize, String mimeType) {
+        if (!connected || stompSession == null) {
+            System.err.println("[DEBUG] sendFileMessage: Not connected to WebSocket server");
+            return null;
+        }
+        System.out.println("[DEBUG] sendFileMessage: Preparing to send file message");
+        System.out.println("[DEBUG] sendFileMessage: Sender (username): " + username);
+        System.out.println("[DEBUG] sendFileMessage: Sender (userId): " + userId);
+        System.out.println("[DEBUG] sendFileMessage: chatId: " + chatId);
+        System.out.println("[DEBUG] sendFileMessage: File URL: " + fileUrl);
+        System.out.println("[DEBUG] sendFileMessage: File Name: " + fileName);
+        System.out.println("[DEBUG] sendFileMessage: File Size: " + fileSize);
+        System.out.println("[DEBUG] sendFileMessage: MIME Type: " + mimeType);
+        System.out.println("[DEBUG] sendFileMessage: Endpoint: " + SEND_ENDPOINT);
+
+        // Get the chat from local storage to check if it's a group chat
+        Chat chat = chats.get(chatId);
+        boolean isGroupChat = chat != null && "group".equalsIgnoreCase(chat.getChatType());
+
+        // Generate a client-side temporary ID for deduplication
+        String clientTempId = UUID.randomUUID().toString();
+
+        // Create a map with field names that match the backend model
+        Map<String, Object> messageMap = new HashMap<>();
+        messageMap.put("messageId", UUID.randomUUID().toString());
+        messageMap.put("messageType", "FILE");
+        messageMap.put("senderId", userId);
+        messageMap.put("chatId", chatId);
+        messageMap.put("content", fileUrl);
+        messageMap.put("fileName", fileName);
+        messageMap.put("fileSize", fileSize);
+        messageMap.put("mimeType", mimeType);
+        messageMap.put("timestamp", LocalDateTime.now());
+        messageMap.put("clientTempId", clientTempId);
+        if (isGroupChat) {
+            messageMap.put("chatType", "group");
+        }
+        try {
+            String jsonPayload = objectMapper.writeValueAsString(messageMap);
+            stompSession.send(SEND_ENDPOINT, jsonPayload.getBytes(StandardCharsets.UTF_8));
+            System.out.println("[DEBUG] sendFileMessage: File message sent successfully");
+            return clientTempId;
+        } catch (Exception e) {
+            System.err.println("[DEBUG] sendFileMessage: Error serializing or sending file message: " + e.getMessage());
+            e.printStackTrace();
+            return null;
+        }
     }
 
     private class CustomStompSessionHandler implements StompSessionHandler {
@@ -800,6 +924,10 @@ public class WebSocketService {
                                 System.out.println("WEBSOCKET DEBUG: Processing USER_STATUS message");
                                 handleUserStatusMessage(messageMap);
                                 break;
+                            case "ADMIN_ACTION":
+                                System.out.println("WEBSOCKET DEBUG: Processing ADMIN_ACTION response");
+                                handleAdminActionResponse(messageMap);
+                                break;
                             case "CHAT_CREATED":
                             case "GROUP_CHAT_CREATED":
                                 // Unified handling for any type of chat creation
@@ -819,12 +947,12 @@ public class WebSocketService {
                                     message.setSenderId((String) messageData.get("senderId"));
                                     message.setContent((String) messageData.get("content"));
                                     message.setChatId(chatId);
-                                    
+
                                     // Set message ID if available
                                     if (messageData.containsKey("messageId")) {
                                         message.setId((String) messageData.get("messageId"));
                                     }
-                                    
+
                                     // Set timestamp if available
                                     if (messageData.containsKey("timestamp")) {
                                         Object timestampObj = messageData.get("timestamp");
@@ -871,12 +999,12 @@ public class WebSocketService {
                                     message.setSenderId((String) messageData.get("senderId"));
                                     message.setContent((String) messageData.get("content"));
                                     message.setChatId(chatId);
-                                    
+
                                     // Set message ID if available
                                     if (messageData.containsKey("messageId")) {
                                         message.setId((String) messageData.get("messageId"));
                                     }
-                                    
+
                                     // Set timestamp if available
                                     if (messageData.containsKey("timestamp")) {
                                         Object timestampObj = messageData.get("timestamp");
@@ -979,33 +1107,34 @@ public class WebSocketService {
             System.out.println("Chat ID: " + message.getChatId());
             System.out.println("Content: " + message.getContent());
             System.out.println("ClientTempId: " + message.getClientTempId());
-            
+
             // Create a unique signature for this message for deduplication
-            String messageSignature = String.format("%s:%s:%s:%s", 
-                message.getSenderId(),
-                message.getChatId(),
-                message.getContent(),
-                message.getClientTempId() != null ? message.getClientTempId() : ""
-            );
-            
+            // Use timestamp to allow same content to be sent multiple times
+            String messageSignature = String.format("%s:%s:%s:%s:%s",
+                    message.getSenderId(),
+                    message.getChatId(),
+                    message.getContent(),
+                    message.getClientTempId() != null ? message.getClientTempId() : "",
+                    message.getTimestamp() != null ? message.getTimestamp().toString() : System.currentTimeMillis());
+
             long currentTime = System.currentTimeMillis();
-            
+
             // Check if we've already processed this message recently
             if (processedMessages.containsKey(messageSignature)) {
                 long lastProcessed = processedMessages.get(messageSignature);
                 if (currentTime - lastProcessed < MESSAGE_DEDUP_TIMEOUT) {
-                    System.out.println("WEBSOCKET DEDUP: Skipping duplicate message (signature: " + messageSignature + ")");
+                    System.out.println(
+                            "WEBSOCKET DEDUP: Skipping duplicate message (signature: " + messageSignature + ")");
                     return;
                 }
             }
-            
+
             // Mark this message as processed
             processedMessages.put(messageSignature, currentTime);
-            
+
             // Clean up old entries to prevent memory leaks
-            processedMessages.entrySet().removeIf(entry -> 
-                currentTime - entry.getValue() > MESSAGE_DEDUP_TIMEOUT);
-            
+            processedMessages.entrySet().removeIf(entry -> currentTime - entry.getValue() > MESSAGE_DEDUP_TIMEOUT);
+
             System.out.println("WEBSOCKET DEDUP: Processing new message (signature: " + messageSignature + ")");
             System.out.println("ClientTempId: " + message.getClientTempId());
 
@@ -1035,7 +1164,7 @@ public class WebSocketService {
                 // Set participants - include both the sender and current user
                 List<String> participants = new ArrayList<>();
                 participants.add(userId); // Add current user
-                
+
                 // Always add the sender to participants
                 if (!participants.contains(message.getSenderId())) {
                     participants.add(message.getSenderId());
@@ -1073,7 +1202,8 @@ public class WebSocketService {
             // Get the chat type
             boolean isGroupChat = chat.getChatType() != null && "group".equalsIgnoreCase(chat.getChatType());
 
-            // If this is a message for a group chat, make sure the message has the chatId set
+            // If this is a message for a group chat, make sure the message has the chatId
+            // set
             if (isGroupChat) {
                 message.setChatId(chatId);
                 System.out.println("[WebSocketService] Handling message for group chat: " + chat.getGroupName());
@@ -1212,7 +1342,8 @@ public class WebSocketService {
                     List<ChatMessage> existingMessages = new ArrayList<>();
                     if (chats.containsKey(chatId) && chats.get(chatId).getMessages() != null) {
                         existingMessages = new ArrayList<>(chats.get(chatId).getMessages());
-                        System.out.println("Preserving " + existingMessages.size() + " existing messages for chat " + chatId);
+                        System.out.println(
+                                "Preserving " + existingMessages.size() + " existing messages for chat " + chatId);
                     }
 
                     Chat chat = chats.getOrDefault(chatId, new Chat());
@@ -1226,7 +1357,7 @@ public class WebSocketService {
                     // For private chats, set the target user (the other participant)
                     String chatType = (String) chatMap.get("chatType");
                     boolean isGroupChat = chatType != null && "group".equalsIgnoreCase(chatType);
-                    
+
                     if (!isGroupChat) {
                         String targetUser = participants.stream()
                                 .filter(p -> !p.equals(userId))
@@ -1235,7 +1366,7 @@ public class WebSocketService {
 
                         chat.setTargetUserId(targetUser);
                     }
-                    
+
                     chat.setOwnerId(userId);
 
                     // Check if we have additional user information in the response
@@ -1527,6 +1658,58 @@ public class WebSocketService {
 
                 // Try to recover by requesting full chat list
                 requestChatList();
+            }
+        }
+
+        private void handleAdminActionResponse(Map<String, Object> messageMap) {
+            try {
+                String action = (String) messageMap.get("action");
+                String status = (String) messageMap.get("status");
+                String chatId = (String) messageMap.get("chatId");
+                String targetUserId = (String) messageMap.get("targetUserId");
+
+                System.out.println("Received admin action response: " + messageMap);
+
+                if (status != null && status.equals("SUCCESS")) {
+                    switch (action) {
+                        case "PROMOTE_ADMIN":
+                            Chat chat = chats.get(chatId);
+                            if (chat != null) {
+                                // Add user to admin list if not already there
+                                chat.addAdmin(targetUserId);
+                                System.out.println("User " + targetUserId + " promoted to admin in chat " + chatId);
+                            }
+                            break;
+                        case "REMOVE_PARTICIPANT":
+                            chat = chats.get(chatId);
+                            if (chat != null) {
+                                // Remove user from participants and admins
+                                chat.removeParticipant(targetUserId);
+                                chat.removeAdmin(targetUserId);
+                                System.out.println("User " + targetUserId + " removed from chat " + chatId);
+                            }
+                            break;
+                        case "UPDATE_GROUP_NAME":
+                            chat = chats.get(chatId);
+                            String newName = (String) messageMap.get("newName");
+                            if (chat != null && newName != null) {
+                                chat.setGroupName(newName);
+                                System.out.println("Updated group name to " + newName + " for chat " + chatId);
+                            }
+                            break;
+                    }
+
+                    // Update UI
+                    if (chatListHandler != null) {
+                        List<Chat> chatList = new ArrayList<>(chats.values());
+                        chatListHandler.accept(chatList);
+                    }
+                } else {
+                    System.err.println("Admin action failed: " + messageMap.get("message"));
+                }
+            } catch (Exception e) {
+                System.err.println("Error handling admin action response: " + e.getMessage());
+                e.printStackTrace();
             }
         }
     }
