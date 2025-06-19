@@ -713,55 +713,6 @@ public class WebSocketService {
         return new CustomStompSessionHandler();
     }
 
-    public String sendFileMessage(String chatId, String fileUrl, String fileName, long fileSize, String mimeType) {
-        if (!connected || stompSession == null) {
-            System.err.println("[DEBUG] sendFileMessage: Not connected to WebSocket server");
-            return null;
-        }
-        System.out.println("[DEBUG] sendFileMessage: Preparing to send file message");
-        System.out.println("[DEBUG] sendFileMessage: Sender (username): " + username);
-        System.out.println("[DEBUG] sendFileMessage: Sender (userId): " + userId);
-        System.out.println("[DEBUG] sendFileMessage: chatId: " + chatId);
-        System.out.println("[DEBUG] sendFileMessage: File URL: " + fileUrl);
-        System.out.println("[DEBUG] sendFileMessage: File Name: " + fileName);
-        System.out.println("[DEBUG] sendFileMessage: File Size: " + fileSize);
-        System.out.println("[DEBUG] sendFileMessage: MIME Type: " + mimeType);
-        System.out.println("[DEBUG] sendFileMessage: Endpoint: " + SEND_ENDPOINT);
-
-        // Get the chat from local storage to check if it's a group chat
-        Chat chat = chats.get(chatId);
-        boolean isGroupChat = chat != null && "group".equalsIgnoreCase(chat.getChatType());
-
-        // Generate a client-side temporary ID for deduplication
-        String clientTempId = UUID.randomUUID().toString();
-
-        // Create a map with field names that match the backend model
-        Map<String, Object> messageMap = new HashMap<>();
-        messageMap.put("messageId", UUID.randomUUID().toString());
-        messageMap.put("messageType", "FILE");
-        messageMap.put("senderId", userId);
-        messageMap.put("chatId", chatId);
-        messageMap.put("content", fileUrl);
-        messageMap.put("fileName", fileName);
-        messageMap.put("fileSize", fileSize);
-        messageMap.put("mimeType", mimeType);
-        messageMap.put("timestamp", LocalDateTime.now());
-        messageMap.put("clientTempId", clientTempId);
-        if (isGroupChat) {
-            messageMap.put("chatType", "group");
-        }
-        try {
-            String jsonPayload = objectMapper.writeValueAsString(messageMap);
-            stompSession.send(SEND_ENDPOINT, jsonPayload.getBytes(StandardCharsets.UTF_8));
-            System.out.println("[DEBUG] sendFileMessage: File message sent successfully");
-            return clientTempId;
-        } catch (Exception e) {
-            System.err.println("[DEBUG] sendFileMessage: Error serializing or sending file message: " + e.getMessage());
-            e.printStackTrace();
-            return null;
-        }
-    }
-
     private class CustomStompSessionHandler implements StompSessionHandler {
         @Override
         public void afterConnected(@NonNull StompSession session, @NonNull StompHeaders connectedHeaders) {

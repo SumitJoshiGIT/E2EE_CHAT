@@ -37,16 +37,6 @@ import java.util.*;
 import javafx.scene.Scene;
 import javafx.stage.Modality;
 import javafx.stage.Stage;
-import javafx.stage.FileChooser;
-import java.io.DataOutputStream;
-import java.io.File;
-import java.io.FileInputStream;
-import java.io.OutputStream;
-import java.net.HttpURLConnection;
-import java.net.URL;
-import java.util.UUID;
-import java.nio.file.Files;
-import javafx.scene.control.Hyperlink;
 
 public class MainController implements Initializable {
     
@@ -89,11 +79,6 @@ public class MainController implements Initializable {
     
     @FXML
     private Label statusLabel;
-    
-    @FXML
-    private Button attachFileButton;
-
-    private Stage filePreviewDialog;
     
     private AuthService authService;
     private WebSocketService webSocketService;
@@ -646,6 +631,11 @@ public class MainController implements Initializable {
                 
                 // Add to our chats list
                 chats.add(targetChat);
+                
+                // Refresh the chat list to get complete information
+                scheduleChatRefreshWithDelay(1);
+            }
+            
             // If we found the chat, add the message to it regardless of whether it's current
             if (targetChat != null) {
                 // Set the chat type for proper handling
@@ -808,7 +798,7 @@ public class MainController implements Initializable {
                 System.out.println("Received CHAT_CREATED event, refreshing chat list");
                 refreshChatList();
             }
-        );
+        });
 
         System.out.println("Message Processed");
     }
@@ -1827,18 +1817,6 @@ public class MainController implements Initializable {
             timeLabel.setAlignment(Pos.BOTTOM_RIGHT);
             
             messageBox.getChildren().addAll(messageLabel, timeLabel);
-
-            // Add right-click context menu
-            this.setOnContextMenuRequested(event -> {
-                if (getItem() == null) return;
-                ContextMenu contextMenu = new ContextMenu();
-                MenuItem replyItem = new MenuItem("Reply");
-                replyItem.setOnAction(e -> handleReplyMessage(getItem()));
-                MenuItem deleteItem = new MenuItem("Delete");
-                deleteItem.setOnAction(e -> handleDeleteMessage(getItem()));
-                contextMenu.getItems().addAll(replyItem, deleteItem);
-                contextMenu.show(this, event.getScreenX(), event.getScreenY());
-            });
         }
         
         @Override
@@ -1852,106 +1830,410 @@ public class MainController implements Initializable {
                 // Clear previous content to prevent duplication
                 messageBox.getChildren().clear();
                 container.getChildren().clear();
-
-                // Handle file messages
-                if (item.getType() == ChatMessage.MessageType.FILE) {
-                    String fileUrl = item.getContent();
-                    String fileName = item.getFileName() != null ? item.getFileName() : "Download File";
-                    Hyperlink fileLink = new Hyperlink(fileName);
-                    fileLink.setOnAction(e -> {
-                        try {
-                            java.awt.Desktop.getDesktop().browse(new java.net.URI("http://localhost:8080" + fileUrl));
-                        } catch (Exception ex) {
-                            statusLabel.setText("Failed to open file: " + ex.getMessage());
-                        }
-                    });
-                    VBox fileBox = new VBox(5);
-                    fileBox.getChildren().add(fileLink);
-                    // If image, show preview
-                    if (item.getMimeType() != null && item.getMimeType().startsWith("image/")) {
-                        try {
-                            javafx.scene.image.Image img = new javafx.scene.image.Image("http://localhost:8080" + fileUrl, 120, 120, true, true);
-                            javafx.scene.image.ImageView imageView = new javafx.scene.image.ImageView(img);
-                            imageView.setPreserveRatio(true);
-                            fileBox.getChildren().add(imageView);
-                        } catch (Exception ex) {
-                            // Ignore image preview errors
-                        }
-                    }
-                    fileBox.getChildren().add(timeLabel);
-                    messageBox.getChildren().add(fileBox);
+                
+                messageLabel.setText(item.getContent());
+                
+                // Format and display timestamp
+                if (item.getTimestamp() != null) {
+                    timeLabel.setText(item.getTimestamp().format(DateTimeFormatter.ofPattern("h:mm a")));
                 } else {
-                    // Default: text message
-                    messageLabel.setText(item.getContent());
-                    if (item.getTimestamp() != null) {
-                        timeLabel.setText(item.getTimestamp().format(DateTimeFormatter.ofPattern("h:mm a")));
-                    } else {
-                        timeLabel.setText("");
-                    }
-                    boolean isCurrentUser = authService.getUserId().equals(item.getSenderId());
-                    if (isCurrentUser) {
-                        container.setAlignment(Pos.CENTER_RIGHT);
-                        messageBox.setStyle(CURRENT_USER_BUBBLE_STYLE);
-                        HBox statusBox = new HBox(3);
-                        statusBox.setAlignment(Pos.BOTTOM_RIGHT);
-                        Label statusLabel = new Label("✓");
-                        statusLabel.setStyle("-fx-text-fill: #888; -fx-font-size: 10px;");
-                        statusBox.getChildren().addAll(timeLabel, statusLabel);
-                        messageBox.getChildren().addAll(messageLabel, statusBox);
-                    } else {
-                        container.setAlignment(Pos.CENTER_LEFT);
-                        messageBox.setStyle(OTHER_USER_BUBBLE_STYLE);
-                        if (currentChat != null && "group".equalsIgnoreCase(currentChat.getChatType())) {
-                            UserProfile sender = userProfiles.get(item.getSenderId());
-                            String senderName = "Unknown";
-                            if (sender != null) {
-                                senderName = sender.getDisplayName();
-                                if (senderName == null || senderName.isEmpty()) {
-                                    senderName = sender.getUsername();
-                                }
+                    timeLabel.setText("");
+                }
+                
+                // Check if message is from current user
+                boolean isCurrentUser = authService.getUserId().equals(item.getSenderId());
+                
+                // Style based on sender (right-aligned green bubbles for current user)
+                if (isCurrentUser) {
+                    container.setAlignment(Pos.CENTER_RIGHT);
+                    messageBox.setStyle(CURRENT_USER_BUBBLE_STYLE);
+                    
+                    // Create status box with time and check mark
+                    HBox statusBox = new HBox(3);
+                    statusBox.setAlignment(Pos.BOTTOM_RIGHT);
+                    
+                    Label statusLabel = new Label("✓");
+                    statusLabel.setStyle("-fx-text-fill: #888; -fx-font-size: 10px;");
+                    statusBox.getChildren().addAll(timeLabel, statusLabel);
+                    
+                    // Add content: message + status
+                    messageBox.getChildren().addAll(messageLabel, statusBox);
+                } else {
+                    container.setAlignment(Pos.CENTER_LEFT);
+                    messageBox.setStyle(OTHER_USER_BUBBLE_STYLE);
+                    
+                    // Add sender name for group chats
+                    if (currentChat != null && "group".equalsIgnoreCase(currentChat.getChatType())) {
+                        UserProfile sender = userProfiles.get(item.getSenderId());
+                        String senderName = "Unknown";
+                        
+                        if (sender != null) {
+                            senderName = sender.getDisplayName();
+                            if (senderName == null || senderName.isEmpty()) {
+                                senderName = sender.getUsername();
                             }
-                            Label senderLabel = new Label(senderName);
-                            senderLabel.setStyle("-fx-text-fill: #1565C0; -fx-font-weight: bold; -fx-font-size: 12px;");
-                            messageBox.getChildren().addAll(senderLabel, messageLabel, timeLabel);
-                        } else {
-                            messageBox.getChildren().addAll(messageLabel, timeLabel);
                         }
+                        
+                        Label senderLabel = new Label(senderName);
+                        senderLabel.setStyle("-fx-text-fill: #1565C0; -fx-font-weight: bold; -fx-font-size: 12px;");
+                        
+                        // Add content: sender name + message + time
+                        messageBox.getChildren().addAll(senderLabel, messageLabel, timeLabel);
+                    } else {
+                        // For private chats, just message + time
+                        messageBox.getChildren().addAll(messageLabel, timeLabel);
                     }
                 }
+                
                 container.getChildren().add(messageBox);
                 setGraphic(container);
             }
         }
     }
-
-    private void sendFileMessage(Map<String, Object> fileInfo) {
-        if (currentChat == null) return;
-        String fileUrl = (String) fileInfo.get("url");
-        String fileName = (String) fileInfo.get("fileName");
-        long fileSize = (long) fileInfo.get("fileSize");
-        String mimeType = (String) fileInfo.get("mimeType");
-        String messageContent = fileUrl; // Store the URL as content
-        // Use WebSocket to send file message
-        webSocketService.sendFileMessage(currentChat.getChatId(), messageContent, fileName, fileSize, mimeType);
+    
+    /**
+     * Search for users by username and update the given ListView with results.
+     * @param query The username query string.
+     * @param userResults The ListView to update with found usernames.
+     */
+    private void searchUsers(String query, ListView<String> userResults) {
+        new Thread(() -> {
+            UserProfile[] results = authService.searchUsers(query);
+            Platform.runLater(() -> {
+                userResults.getItems().clear();
+                // Clear the stored user profiles map for this search
+                searchResults.clear();
+                
+                if (results != null && results.length > 0) {
+                    for (UserProfile user : results) {
+                        // Avoid showing current user
+                        if (!user.getUsername().equals(authService.getCurrentUsername())) {
+                            // Display format: "DisplayName (username)" or just "username" if no display name
+                            String displayText = user.getDisplayName() != null && !user.getDisplayName().isEmpty() 
+                                ? user.getDisplayName() + " (" + user.getUsername() + ")"
+                                : user.getUsername();
+                            userResults.getItems().add(displayText);
+                            
+                            // Store the user profile for later ID lookup
+                            searchResults.add(user);
+                            
+                            System.out.println("Added user to search results: " + displayText + " with ID: " + user.getProfileId());
+                        }
+                    }
+                }
+            });
+        }).start();
     }
-
-    private Map<String, Object> parseFileUploadResponse(String json) {
-        // Simple JSON parsing (no external libs)
-        Map<String, Object> map = new HashMap<>();
-        json = json.replaceAll("[{}\"]", "");
-        String[] parts = json.split(",");
-        for (String part : parts) {
-            String[] kv = part.split(":", 2);
-            if (kv.length == 2) {
-                String key = kv[0].trim();
-                String value = kv[1].trim();
-                if (key.equals("fileSize")) {
-                    map.put(key, Long.parseLong(value));
-                } else {
-                    map.put(key, value);
+    
+    /**
+     * Updates the chat header UI with profile picture, status, and member information
+     * @param chat The currently selected chat
+     */
+    private void updateChatHeaderUI(Chat chat) {
+        if (chat == null) {
+            // Reset UI elements
+            profileInitialsLabel.setText("");
+            profilePicContainer.setStyle("-fx-background-color: #DDD; -fx-background-radius: 22.5; -fx-effect: dropshadow(three-pass-box, rgba(0,0,0,0.1), 2, 0, 0, 1);");
+            memberStatusLabel.setText("No members");
+            return;
+        }
+        
+        boolean isGroupChat = chat.getChatType() != null && "group".equalsIgnoreCase(chat.getChatType());
+        
+        // Update profile picture / avatar
+        if (isGroupChat) {
+            // Group chat icon with blue background
+            profileInitialsLabel.setText("👥");
+            profilePicContainer.setStyle("-fx-background-color: #0084FF; -fx-background-radius: 22.5; -fx-effect: dropshadow(three-pass-box, rgba(0,0,0,0.1), 2, 0, 0, 1);");
+            
+            // Update member status for group chats
+            int totalMembers = (chat.getParticipants() != null) ? chat.getParticipants().size() : 0;
+            int onlineMembers = 0;
+            
+            if (chat.getParticipants() != null) {
+                for (String memberId : chat.getParticipants()) {
+                    UserProfile profile = userProfiles.get(memberId);
+                    if (profile != null && profile.isOnline()) {
+                        onlineMembers++;
+                    }
                 }
             }
+            
+            // Format: "5 members, 2 online" (if there are online members)
+            // or simply "5 members" (if no one is online)
+            if (onlineMembers > 0) {
+                memberStatusLabel.setText(totalMembers + " members, " + onlineMembers + " online");
+            } else {
+                memberStatusLabel.setText(totalMembers + " members");
+            }
+        } else {
+            // Individual chat - get the other user's profile
+            String targetUserId = chat.getTargetUserId();
+            UserProfile targetProfile = userProfiles.get(targetUserId);
+            
+            // Default values
+            String displayName = chat.getTargetUsername();
+            if (displayName == null || displayName.isEmpty() || displayName.equals(targetUserId)) {
+                displayName = targetUserId;
+            }
+            
+            // Set initials in the profile circle
+            String initials = getInitials(displayName);
+            profileInitialsLabel.setText(initials);
+            
+            // Set background color based on initial - consistent color for same user
+            int hashCode = Math.abs(displayName.hashCode()) % 8;
+            String[] colors = {
+                "#1E88E5", // Blue
+                "#43A047", // Green
+                "#E53935", // Red
+                "#FB8C00", // Orange
+                "#8E24AA", // Purple
+                "#00897B", // Teal
+                "#F4511E", // Deep Orange
+                "#546E7A"  // Blue Grey
+            };
+            
+            profilePicContainer.setStyle(
+                "-fx-background-color: " + colors[hashCode] + "; " +
+                "-fx-background-radius: 22.5; " +
+                "-fx-effect: dropshadow(three-pass-box, rgba(0,0,0,0.1), 2, 0, 0, 1);"
+            );
+            
+            // Update online status
+            boolean isOnline = false;
+            if (targetProfile != null) {
+                isOnline = targetProfile.isOnline();
+                if (targetProfile.getAvatarUrl() != null && !targetProfile.getAvatarUrl().isEmpty()) {
+                    // TODO: Load avatar image if available
+                    // For now we're just using initials
+                }
+            }
+            if (isOnline) {
+                profileInitialsLabel.setText(initials);
+                memberStatusLabel.setText("Online");
+                memberStatusLabel.setStyle("-fx-text-fill: #43A047;"); // Green color for online
+            } else {
+                memberStatusLabel.setText("Offline");
+                memberStatusLabel.setStyle("-fx-text-fill: #757575;"); // Gray color for offline
+            }
         }
-        return map;
+    }
+    
+    private void showAdminPanel(Chat chat) {
+        if (chat == null || !"group".equalsIgnoreCase(chat.getChatType())) {
+            statusLabel.setText("Admin panel is only available for group chats");
+            return;
+        }
+
+        Dialog<Void> dialog = new Dialog<>();
+        dialog.setTitle("Admin Panel");
+        dialog.setHeaderText(chat.getGroupName() + " - Admin Controls");
+
+        DialogPane dialogPane = dialog.getDialogPane();
+        dialogPane.setStyle("-fx-background-color: white;");
+        dialogPane.setPrefWidth(450);
+
+        TabPane tabPane = new TabPane();
+        tabPane.setTabClosingPolicy(TabPane.TabClosingPolicy.UNAVAILABLE);
+
+        // Participants Management Tab
+        Tab participantsTab = new Tab("Participants");
+        VBox participantsContent = new VBox(10);
+        participantsContent.setPadding(new Insets(10));
+
+        ListView<HBox> participantsListView = new ListView<>();
+        ObservableList<HBox> participantItems = FXCollections.observableArrayList();
+
+        for (String participantId : chat.getParticipants()) {
+            UserProfile profile = userProfiles.get(participantId);
+            if (profile != null) {
+                String displayName = profile.getDisplayName();
+                if (displayName == null || displayName.isEmpty()) {
+                    displayName = profile.getUsername();
+                }
+                boolean isCurrentUser = participantId.equals(authService.getUserId());
+                if (isCurrentUser) {
+                    displayName += " (You)";
+                }
+                final String finalDisplayName = displayName;
+                HBox participantRow = createAdminParticipantRow(
+                    displayName,
+                    profile.isOnline(),
+                    isCurrentUser,
+                    chat.isAdmin(participantId),
+                    e -> handlePromoteToAdmin(chat, participantId, finalDisplayName),
+                    e -> handleRemoveParticipant(chat, participantId, finalDisplayName)
+                );
+                participantItems.add(participantRow);
+            }
+        }
+        participantsListView.setItems(participantItems);
+        participantsContent.getChildren().add(participantsListView);
+        participantsTab.setContent(participantsContent);
+
+        // Settings Tab
+        Tab settingsTab = new Tab("Settings");
+        VBox settingsContent = new VBox(15);
+        settingsContent.setPadding(new Insets(15));
+
+        // Group Name Setting
+        Label groupNameLabel = new Label("Group Name");
+        TextField groupNameField = new TextField(chat.getGroupName());
+        Button updateNameButton = new Button("Update Name");
+        updateNameButton.setOnAction(e -> handleUpdateGroupName(chat, groupNameField.getText()));
+
+        // Chat Image Setting (placeholder)
+        Label chatImgLabel = new Label("Chat Image");
+        Button changeImgButton = new Button("Change Image");
+        changeImgButton.setOnAction(e -> {
+            // TODO: Implement image picker and backend update
+            showAlert("Not implemented", "Chat image change is not implemented yet.");
+        });
+
+        // Message Retention Setting
+        Label retentionLabel = new Label("Message Retention");
+        ComboBox<String> retentionComboBox = new ComboBox<>();
+        retentionComboBox.getItems().addAll(
+            "Forever",
+            "1 Week",
+            "1 Month",
+            "3 Months"
+        );
+        retentionComboBox.setValue("Forever");
+        retentionComboBox.setDisable(true); // TODO: Implement in future
+
+        // Encryption Setting
+        Label encryptionLabel = new Label("End-to-End Encryption");
+        CheckBox encryptionCheckBox = new CheckBox();
+        encryptionCheckBox.setSelected(true);
+        encryptionCheckBox.setDisable(true); // Always enabled
+
+        // Add settings to the content
+        settingsContent.getChildren().addAll(
+            groupNameLabel,
+            new HBox(10, groupNameField, updateNameButton),
+            new HBox(10, chatImgLabel, changeImgButton),
+            new Separator(),
+            retentionLabel,
+            retentionComboBox,
+            new Separator(),
+            new HBox(10, encryptionLabel, encryptionCheckBox)
+        );
+        settingsTab.setContent(settingsContent);
+
+        // Add tabs to the pane
+        tabPane.getTabs().addAll(participantsTab, settingsTab);
+        dialogPane.setContent(tabPane);
+
+        dialogPane.getButtonTypes().add(ButtonType.CLOSE);
+        dialog.showAndWait();
+    }
+
+    private HBox createAdminParticipantRow(String displayName, boolean isOnline, boolean isCurrentUser, 
+                                         boolean isAdmin, EventHandler<ActionEvent> onPromote, 
+                                         EventHandler<ActionEvent> onRemove) {
+        HBox rowContainer = new HBox();
+        rowContainer.setAlignment(Pos.CENTER_LEFT);
+        rowContainer.setSpacing(10);
+        rowContainer.setPadding(new Insets(8, 10, 8, 10));
+
+        // Create avatar circle with initials
+        StackPane avatar = new StackPane();
+        avatar.setMinSize(35, 35);
+        avatar.setPrefSize(35, 35);
+        avatar.setMaxSize(35, 35);
+
+        String initials = getInitials(displayName);
+        int hashCode = Math.abs(displayName.hashCode()) % 8;
+        String[] colors = {
+            "#1E88E5", "#43A047", "#E53935", "#FB8C00",
+            "#8E24AA", "#00897B", "#F4511E", "#546E7A"
+        };
+
+        avatar.setStyle("-fx-background-color: " + colors[hashCode] + "; -fx-background-radius: 17.5;");
+
+        Label initialsLabel = new Label(initials);
+        initialsLabel.setStyle("-fx-text-fill: white; -fx-font-weight: bold;");
+        avatar.getChildren().add(initialsLabel);
+
+        // User info section
+        VBox userInfo = new VBox();
+        userInfo.setSpacing(2);
+        HBox.setHgrow(userInfo, Priority.ALWAYS);
+
+        Label nameLabel = new Label(displayName + (isAdmin ? " 👑" : ""));
+        nameLabel.setStyle("-fx-font-weight: " + (isCurrentUser ? "bold" : "normal") + ";");
+
+        Label statusLabel = new Label(isOnline ? "Online" : "Offline");
+        statusLabel.setStyle("-fx-text-fill: " + (isOnline ? "#43A047" : "#757575") + "; -fx-font-size: 11px;");
+
+        userInfo.getChildren().addAll(nameLabel, statusLabel);
+
+        // Action buttons
+        HBox actionButtons = new HBox(5);
+        actionButtons.setAlignment(Pos.CENTER_RIGHT);
+
+        if (!isCurrentUser && !isAdmin) {
+            Button promoteButton = new Button("Promote");
+            promoteButton.setStyle("-fx-background-color: #4CAF50; -fx-text-fill: white;");
+            promoteButton.setOnAction(onPromote);
+            actionButtons.getChildren().add(promoteButton);
+        }
+
+        if (!isCurrentUser) {
+            Button removeButton = new Button("Remove");
+            removeButton.setStyle("-fx-background-color: #f44336; -fx-text-fill: white;");
+            removeButton.setOnAction(onRemove);
+            actionButtons.getChildren().add(removeButton);
+        }
+
+        rowContainer.getChildren().addAll(avatar, userInfo);
+        if (!actionButtons.getChildren().isEmpty()) {
+            rowContainer.getChildren().add(actionButtons);
+        }
+
+        return rowContainer;
+    }
+
+    private void handlePromoteToAdmin(Chat chat, String userId, String displayName) {
+        Alert confirm = new Alert(Alert.AlertType.CONFIRMATION);
+        confirm.setTitle("Promote to Admin");
+        confirm.setHeaderText("Promote " + displayName + " to Admin?");
+        confirm.setContentText("This user will have full administrative privileges in the group.");
+
+        confirm.showAndWait().ifPresent(result -> {
+            if (result == ButtonType.OK) {
+                // TODO: Implement backend call to promote user
+                webSocketService.promoteToAdmin(chat.getChatId(), userId);
+                statusLabel.setText("Promoted " + displayName + " to admin");
+            }
+        });
+    }
+
+    private void handleRemoveParticipant(Chat chat, String userId, String displayName) {
+        Alert confirm = new Alert(Alert.AlertType.CONFIRMATION);
+        confirm.setTitle("Remove Participant");
+        confirm.setHeaderText("Remove " + displayName + " from group?");
+        confirm.setContentText("This user will no longer be able to send or receive messages in this group.");
+
+        confirm.showAndWait().ifPresent(result -> {
+            if (result == ButtonType.OK) {
+                // TODO: Implement backend call to remove user
+                webSocketService.removeFromGroup(chat.getChatId(), userId);
+                statusLabel.setText("Removed " + displayName + " from group");
+            }
+        });
+    }
+
+    private void handleUpdateGroupName(Chat chat, String newName) {
+        if (newName == null || newName.trim().isEmpty()) {
+            statusLabel.setText("Group name cannot be empty");
+            return;
+        }
+
+        // TODO: Implement backend call to update group name
+        webSocketService.updateGroupName(chat.getChatId(), newName.trim());
+        statusLabel.setText("Group name updated to: " + newName.trim());
     }
 }
